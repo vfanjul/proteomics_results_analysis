@@ -1,0 +1,11 @@
+﻿sample;replicate;group;color;control
+126t;1;WT;black;1
+127_N;2;WT;black;1
+127_C;3;WT;black;1
+128_N;4;WT;black;1
+128_C;5;WT;black;1
+129_N;1;LmnaKO;red;0
+129_C;2;LmnaKO;red;0
+130_N;3;LmnaKO;red;0
+130_C;4;LmnaKO;red;0
+131t;5;LmnaKO;red;0
