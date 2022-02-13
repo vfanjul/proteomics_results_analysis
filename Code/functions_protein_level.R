@@ -3,9 +3,9 @@
 
 #### Load functions ####
 
-libraries <- c("car", "eulerr", "GGally", "gplots")
+libraries <- c("car", "eulerr", "GGally", "gplots", "ggplot2", "ggnewscale", "ggridges")
 
-bioc_libraries <- c("limma", "clusterProfiler")
+bioc_libraries <- c("limma", "clusterProfiler", "enrichplot")
 # org.Ss.eg.db org.Mm.eg.db
 
 

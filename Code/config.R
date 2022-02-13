@@ -5,6 +5,7 @@
 #### Setup ####
 
 ## Study
+author <- "Víctor Fanjul, PhD"
 project <- "Premature vs Normal Aging"
 species <- "Mus musculus" # Mus musculus Homo sapiens Sus scrofa
 databases <- ""
@@ -29,6 +30,6 @@ np_field <- "Np"
 #### File paths ####
 
 designroute <- "Input/design.csv"
-protroute <- "Input/Datasets/protein_results.csv"
-catroute <- "Input/Datasets/category_results.csv"
+protroute <- "Input/protein_results.csv"
+catroute <- "Input/category_results.csv"
 outpuroute <- "Output/"

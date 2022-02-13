@@ -1,5 +1,5 @@
 ---
-author: "Víctor Fanjul, PhD"
+author: "`r author`"
 date: "`r format(Sys.time(), '%Y-%m-%d')`"
 output:
   bookdown::html_document2:
@@ -14,8 +14,7 @@ output:
 knitr::opts_chunk$set(echo = FALSE, cache = FALSE, message = FALSE, 
                       warning = FALSE, fig.align = "center", rows.print = 20)
 
-knitr::opts_knit$set(root.dir = "../..")
-
+knitr::opts_knit$set(root.dir = "..")
 ```
 
 ```{r config, include=FALSE}
@@ -23,7 +22,7 @@ knitr::opts_knit$set(root.dir = "../..")
 source("Code/config.R")
 source("Code/functions_general.R")
 get_libraries(libraries, bioc_libraries)
-source("Code/Protein_level/functions_protein_level.R")
+source("Code/functions_protein_level.R")
 get_libraries(libraries, bioc_libraries)
 ```
 
@@ -210,7 +209,7 @@ plot_bars(prot_data[get(np_field) > 1 & !Artifact], groups, case_params,
 
 prot_data[, (case_dys) := lapply(case_params, function(x) abs(get(x)) >= zlim_opt$best_zlim)]
 prot_data[, (case_up) := lapply(case_params, function(x) get(x) >= zlim_opt$best_zlim)]
-prot_data[, (case_down) := lapply(case_params, function(x) -get(x) >= zlim_opt$best_zlim)]
+prot_data[, (case_down) := lapply(case_params, function(x) - get(x) >= zlim_opt$best_zlim)]
 
 if (length(groups) > 2) plot_euler(prot_data[get(np_field) > 1 & !Artifact], 
                                    case_dys, case_groups, 
