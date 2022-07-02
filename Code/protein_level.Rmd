@@ -21,7 +21,8 @@ knitr::opts_knit$set(root.dir = "..")
 
 source("Code/config.R")
 source("Code/functions_general.R")
-get_libraries(libraries, bioc_libraries)
+sel_org <- all_org[all_org$species %in% species, ]
+get_libraries(libraries, sel_org$go)
 source("Code/functions_protein_level.R")
 get_libraries(libraries, bioc_libraries)
 ```
@@ -82,7 +83,7 @@ Comparative analysis of protein abundance changes was conducted with the SanXoT 
 
 Within-group and between-group variability was assessed in the samples by fitting unsupervised Machine Learning algorithms (hierarchical clustering and principal component analysis: PCA) and by pairwise correlations between samples ([Emerson et al., 2012](https://doi.org/10.1080/10618600.2012.694762)). Statistical differences between groups were estimated using linear models from the R package "limma" ([Ritchie et al., 2015](https://doi.org/10.1093/nar/gkv007)). `r R.version$version.string` was used. A significance threshold was established by comparing z-scores and p values in volcanic plots. The selected threshold was the absolute `r ifelse(rel_to == "control_mean", "mean", "∆ mean")` z-score that maximized true positive detections in relation to false positives and false negatives (measured by F1-score), given $\alpha$ = `r alphas`. `r ifelse(length(groups) > 2, "As in this study there were multiple case groups, the mean F1-score between conditions was calculated.", "")` `r ifelse(rm_artifacts, paste0("Known artifact proteins such as ", exclude_text, " were excluded from the datasets after the analysis."), "")`
 
-Enrichment methods
+Gene set enrichment analysis (GSEA) was performed using the Gene Ontology Biological Process (GO-BP) and the Kyoto Encyclopedia of Genes and Genomes (KEGG) databases, and the R package "clusterProfiler" ([Wu et al., 2021](https://doi.org/10.1016/j.xinn.2021.100141)). Allowed set sizes were between 10 and 500, p values were adjusted by the Benjamini-Hochberg procedure, and a seed was set to ensure reproducibility.
 
 
 
@@ -93,13 +94,13 @@ Enrichment methods
 prot_data <- fread(protroute)
 setnames(prot_data, exp_design$label, samples)
 
-prot_data <- get_prot_fields(prot_data, prot_field)
+prot_data <- get_prot_cols(prot_data, prot_col)
 
 prot_data <- add_group_means(prot_data, samples_by_group, group_means, 
                              case_params, ctrl_mean, rel_to)
 ```
 
-A total of `r prot_data[, .N]` proteins were detected and quantified at FDR < `r fdr_quant*100`%. Of these proteins, `r prot_data[get(np_field) > 1, .N]` were quantified with more than one unique peptide.
+A total of `r prot_data[, .N]` proteins were detected and quantified at FDR < `r fdr_quant*100`%. Of these proteins, `r prot_data[get(np_col) > 1, .N]` were quantified with more than one unique peptide.
 
 
 ## Normality Verification
@@ -116,15 +117,15 @@ plot_facets(prot_data, samples, "", plot_qq)
 
 ## Sample Variability Assessment
 
-Within-group and between-group variability was assessed by hierarchical clustering and principal component analysis (PCA). The cumulative proportion of variance explained by the first 3 components was `r summary(prcomp(t(prot_data[get(np_field) > 1][, .SD, .SDcols = samples]), scale. = TRUE))$importance[3, 1:3]`.
+Within-group and between-group variability was assessed by hierarchical clustering and principal component analysis (PCA). The cumulative proportion of variance explained by the first 3 components was `r summary(prcomp(t(prot_data[get(np_col) > 1][, .SD, .SDcols = samples]), scale. = TRUE))$importance[3, 1:3]`.
 
 ```{r variability, fig.height=4/0.9, fig.width=4/0.9, fig.cap=c("Sample hierarchical clustering.", "", "", "Sample Principal Component Analysis (PCA). PC1, 2, 3: PCA component 1, 2, 3.")}
 
-plot_dendrogram(prot_data[get(np_field) > 1], samples)
+plot_dendrogram(prot_data[get(np_col) > 1], samples)
 
-plot_pca(prot_data[get(np_field) > 1], samples, exp_design$color, groups, 1, 2)
-plot_pca(prot_data[get(np_field) > 1], samples, exp_design$color, groups, 2, 3)
-plot_pca(prot_data[get(np_field) > 1], samples, exp_design$color, groups, 1, 3)
+plot_pca(prot_data[get(np_col) > 1], samples, exp_design$color, groups, 1, 2)
+plot_pca(prot_data[get(np_col) > 1], samples, exp_design$color, groups, 2, 3)
+plot_pca(prot_data[get(np_col) > 1], samples, exp_design$color, groups, 1, 3)
 ```
 
 ```{r variability_legend, fig.height=1/0.9, fig.width=4/0.9}
@@ -139,7 +140,7 @@ Between-sample variability was further assessed by analyzing the correlation bet
 
 ```{r corr, fig.height=7/0.9, fig.width=7/0.9, fig.cap="Pairwise correlation plots to assess between-sample variability. Corr: Pearson correlation coefficient."}
 
-plot_corrpairs(prot_data[get(np_field) > 1], samples)
+plot_corrpairs(prot_data[get(np_col) > 1], samples)
 ```
 
 ***Note:** Correlations are expected to be higher between samples of the same group for the reasons stated before. The most relevant correlations may be reported in the article text.*
@@ -156,7 +157,7 @@ fit_cont <- fit_limma(prot_data, samples, exp_design$group)
 prot_data[, (gsub(paste0("-?", ctrl_group, "-?"), "", fit_cont$dt.cols)) :=
   lapply(colnames(fit_cont$p.value), function(x) fit_cont$p.value[, x])]
 
-zlim_opt <- optimize_zlim(prot_data[get(np_field) > 1],
+zlim_opt <- optimize_zlim(prot_data[get(np_col) > 1],
                           case_params,
                           case_p_values,
                           zlim = zlims,
@@ -169,7 +170,7 @@ A significance threshold was established by comparing z-scores from the WSPP mod
 
 ```{r volcano, fig.height=4/0.9*facets_volcano[1], fig.width=4/0.9*facets_volcano[2], fig.cap="Volcano plots for statistical significance threshold determination. The x axis represents mean z-scores from the WSPP model for each condition, and the y axis, p values from the limma models. The horizontal line is the optimal $\\alpha$ threshold and the vertical lines are the z-score threshold that maximize F1-score. Red points: true positives; blue points: false positives; green points: false negatives; grey points: true negatives."}
 
-plot_facets(prot_data[get(np_field) > 1],
+plot_facets(prot_data[get(np_col) > 1],
             case_params,
             case_p_values,
             plot_volcano,
@@ -182,11 +183,11 @@ plot_facets(prot_data[get(np_field) > 1],
 
 ## Artifact Removal
 
-`r ifelse(rm_artifacts, paste0("After filtering by proteins quantified with more than one unique peptide, known artifact proteins such as ", exclude_text, " were excluded from the datasets in the following analyses (", prot_data[get(np_field) > 1][grep(paste0(exclude_pattern, collapse = "|"), get(prot_field), ignore.case = TRUE), .N], " proteins)."), "No possible artifact proteins were excluded from the analyses.")`
+`r ifelse(rm_artifacts, paste0("After filtering by proteins quantified with more than one unique peptide, known artifact proteins such as ", exclude_text, " were excluded from the datasets in the following analyses (", prot_data[get(np_col) > 1][grep(paste0(exclude_pattern, collapse = "|"), get(prot_col), ignore.case = TRUE), .N], " proteins)."), "No possible artifact proteins were excluded from the analyses.")`
 
 ```{r artifacts}
 
-prot_data <- flag_artifacts(prot_data, prot_field, rm_artifacts, exclude_pattern)
+prot_data <- flag_artifacts(prot_data, prot_col, rm_artifacts, exclude_pattern)
 ```
 
 
@@ -201,8 +202,8 @@ prot_data <- flag_z_changes(prot_data, case_params, case_change, zlim_opt$best_z
 
 prot_data <- setorderv(prot_data, c(case_change, case_params), order = -1)
 
-plot_bars(prot_data[get(np_field) > 1 & !Artifact], groups, case_params, 
-          unique(exp_design[, color]), zlim_opt$best_zlim, prot_field)
+plot_bars(prot_data[get(np_col) > 1 & !Artifact], groups, case_params, 
+          unique(exp_design[, color]), zlim_opt$best_zlim, prot_col)
 ```
 
 ```{r euler, fig.height=4/0.9, fig.width=4/0.9, fig.cap=c("Euler diagram showing common dysregulated proteins in each condition.", "Euler diagram showing common upregulated proteins in each condition.", "Euler diagram showing common downregulated proteins in each condition.")}
@@ -211,15 +212,15 @@ prot_data[, (case_dys) := lapply(case_params, function(x) abs(get(x)) >= zlim_op
 prot_data[, (case_up) := lapply(case_params, function(x) get(x) >= zlim_opt$best_zlim)]
 prot_data[, (case_down) := lapply(case_params, function(x) - get(x) >= zlim_opt$best_zlim)]
 
-if (length(groups) > 2) plot_euler(prot_data[get(np_field) > 1 & !Artifact], 
+if (length(groups) > 2) plot_euler(prot_data[get(np_col) > 1 & !Artifact], 
                                    case_dys, case_groups, 
                                    unique(exp_design[control == 0, color]))
 
-if (length(groups) > 2) plot_euler(prot_data[get(np_field) > 1 & !Artifact], 
+if (length(groups) > 2) plot_euler(prot_data[get(np_col) > 1 & !Artifact], 
                                    case_up, case_groups, 
                                    unique(exp_design[control == 0, color]))
 
-if (length(groups) > 2) plot_euler(prot_data[get(np_field) > 1 & !Artifact], 
+if (length(groups) > 2) plot_euler(prot_data[get(np_col) > 1 & !Artifact], 
                                    case_down, case_groups, 
                                    unique(exp_design[control == 0, color]))
 ```
@@ -233,7 +234,7 @@ A curated list of differentially abundant proteins is provided as a heat map. Fo
 
 ```{r heat_data}
 
-prot_data2 <- prot_data[get(np_field) > 1 & !Artifact]
+prot_data2 <- prot_data[get(np_col) > 1 & !Artifact]
 prot_data2 <- prot_data2[prot_data2[, Reduce(`|`, Map(`!=`, .SD, 0)) , .SDcols = case_change]]
 prot_data2 <- prot_data2[prot_data2[, Reduce(`|`, Map(`<`, .SD, 0.05)) , .SDcols = case_p_values]]
 prot_data2[, prot_lab := paste(Accession, Protein_name)]
@@ -272,18 +273,79 @@ plot_prot_heatmap_key(sat_lim)
 
 ```{r export}
 
-data_fields <- unique(c(prot_field, np_field, samples, group_means, case_params, case_p_values, case_change))
-if (rm_artifacts) data_fields <- c(data_fields, "Artifact")
+data_cols <- unique(c(prot_col, np_col, samples, group_means, case_params, case_p_values, case_change))
+if (rm_artifacts) data_cols <- c(data_cols, "Artifact")
 
-fwrite(prot_data[, ..data_fields], 
+fwrite(prot_data[, ..data_cols], 
        paste0("Output/", project, " protein_results.csv"), sep = ";")
 
-write_excel(prot_data[, ..data_fields], 
+write_excel(prot_data[, ..data_cols], 
             paste0("Output/", project, " protein_results.xlsx"), "protein_results", 
-            c(samples, case_params), case_p_values, case_change, np_field)
+            c(samples, case_params), case_p_values, case_change, np_col)
 ```
 
 
-# Protein Enrichment Analysis
-enrichment: kegg enrichment (up, down)
+# Gene Set Enrichment Analysis
+
+GSEA was performed using both the GO and KEGG databases.
+
+```{r gsea}
+gsea_go <- get_gsea(prot_data[get(np_col) > 1 & !Artifact], case_params, 
+                        source_db = "GO", species = sel_org$go)
+
+gsea_kegg <- get_gsea(prot_data[get(np_col) > 1 & !Artifact], case_params, 
+                    source_db = "KEGG", species = sel_org$kegg)
+
+if (min(gsea_go@result$p.adjust) > 0.05 | 
+    min(gsea_kegg@result$p.adjust) > 0.05) adj.pvalue <- FALSE
+p_col <- ifelse(adj.pvalue, "p.adjust", "pvalue")
+
+
+gsea_go_sig <- get_gsea_sig(gsea_go, p_col = p_col)
+gsea_go_long <- get_gsea_long(gsea_go_sig, prot_data[get(np_col) > 1 & !Artifact], case_params)
+
+gsea_kegg_sig <- get_gsea_sig(gsea_kegg, p_col = p_col)
+gsea_kegg_long <- get_gsea_long(gsea_kegg_sig, prot_data[get(np_col) > 1 & !Artifact], case_params)
+
+go_height <- (length(unique(gsea_go_sig@result$Description)) + 20)/10
+kegg_height <- (length(unique(gsea_kegg_sig@result$Description)) + 20)/10
+```
+
+## GO GSEA
+
+```{r gogsea, fig.height=go_height, fig.width=8/0.9, fig.cap=paste0("Enriched GO categories. Protein relative abundance change distributions in categories with significant enrichment (outlined in black). z indicates protein abundance compared with ", ctrl_group, ". Color intensity is maximal when |z| ≥ ", sat_lim, ".")}
+
+plot_gsea_ridges(gsea_go_long, gsub("z .*", "z", case_params)[1], p_col = p_col)
+```
+
+***Note:** When there are multiple group analyses, categories with non-significant enrichment (according to `r p_col`) may be present for certain groups. These are outlined in light grey, as opposed to significantly enriched categories (outlined in black).*
+
+```{r gocnet, fig.height=8/0.9, fig.width=8/0.9, echo=FALSE, message=FALSE, results="asis", fig.cap=paste0("Enriched GO category concept network per group. z indicates protein abundance compared with ", ctrl_group, ". Color intensity is maximal when |z| ≥ ", sat_lim, ".")}
+
+for(i in case_params) {
+  cat("  \n###",  i, "GO GSEA concept network \n")
+  plot_gsea_cnet(get_gsea_group(gsea_go, prot_data[get(np_col) > 1 & !Artifact], i, p_col = p_col))
+  cat("  \n")
+}
+```
+
+
+## KEGG GSEA
+
+```{r kegggsea, fig.height=kegg_height, fig.width=8/0.9, fig.cap=paste0("Enriched KEGG categories. Protein relative abundance change distributions in categories with significant enrichment (outlined in black). z indicates protein abundance compared with ", ctrl_group, ". Color intensity is maximal when |z| ≥ ", sat_lim, ".")}
+
+plot_gsea_ridges(gsea_kegg_long, gsub("z .*", "z", case_params)[1], p_col = p_col)
+```
+
+***Note:** When there are multiple group analyses, categories with non-significant enrichment (according to `r p_col`) may be present for certain groups. These are outlined in light grey, as opposed to significantly enriched categories (outlined in black).*
+
+```{r keggcnet, fig.height=8/0.9, fig.width=8/0.9, echo=FALSE, message=FALSE, results="asis", fig.cap=paste0("Enriched KEGG category concept network per group. z indicates protein abundance compared with ", ctrl_group, ". Color intensity is maximal when |z| ≥ ", sat_lim, ".")}
+
+for(i in case_params) {
+  cat("  \n###",  i, "KEGG GSEA concept network \n")
+  plot_gsea_cnet(get_gsea_group(gsea_kegg, prot_data[get(np_col) > 1 & !Artifact], i, p_col = p_col))
+  cat("  \n")
+}
+```
+
 
