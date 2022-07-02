@@ -3,9 +3,10 @@
 
 #### Load functions ####
 
-libraries <- c("car", "eulerr", "GGally", "gplots", "ggplot2", "ggnewscale", "ggridges")
+libraries <- c("car", "eulerr", "GGally", "gplots", "ggplot2", "ggnewscale", 
+               "ggridges", "scales")
 
-bioc_libraries <- c("limma", "clusterProfiler", "enrichplot")
+bioc_libraries <- c("limma", "clusterProfiler", "enrichplot", "ggrepel")
 # org.Ss.eg.db org.Mm.eg.db
 
 
@@ -116,10 +117,10 @@ fit_limma <- function(dt, samples, sample_groups) {
 #' @description Adds a column that flags protein artifacts in a proteomics dataset.
 #' 
 #' @param dt Proteomics dataset.
-#' @param prot_field Protein column name.
+#' @param prot_col Protein column name.
 #' @param rm_artifacts Whether to remove artifacts (TRUE/FALSE).
 #' @param exclude_pattern Vector of artifact name patterns.
-#' @param artifact_field Name for artifact column. Default is "Artifact".
+#' @param artifact_col Name for artifact column. Default is "Artifact".
 #' 
 #' @return Data table with additional column.
 #' 
@@ -130,12 +131,12 @@ fit_limma <- function(dt, samples, sample_groups) {
 #' 
 #' @author Victor Fanjul (2021-12-05)
 
-flag_artifacts <- function(dt, prot_field, rm_artifacts, exclude_pattern, 
-                           artifact_field = "Artifact") {
-  dt <- as.data.table(dt)[, (artifact_field) := FALSE]
+flag_artifacts <- function(dt, prot_col, rm_artifacts, exclude_pattern, 
+                           artifact_col = "Artifact") {
+  dt <- as.data.table(dt)[, (artifact_col) := FALSE]
   if (rm_artifacts) {
     dt[grep(paste0(exclude_pattern, collapse = "|"), 
-            get(prot_field), ignore.case = TRUE), (artifact_field) := TRUE]
+            get(prot_col), ignore.case = TRUE), (artifact_col) := TRUE]
   }
 }
 
@@ -169,27 +170,198 @@ flag_z_changes <- function(dt, case_param_cols, case_change_cols, zlim) {
 
 
 
-#' Get Protein Fields
+#' Get GSEA
 #' 
-#' @description Extracts information from the protein name field in a proteomics 
+#' @description Performs a gene-set enrichment analysis (GSEA).
+#' 
+#' @param dt Proteomics dataset.
+#' @param param_cols Protein abundance column names.
+#' @param source_db GSEA based on GO or KEGG. Default is "GO".
+#' @param species Species in a format compatible with source db. Default is "org.Hs.eg.db".
+#' @param ont Ontology in GO. Default is "BP".
+#' @param name_col Protein name column name. Default is "Accession".
+#' @param keyType Gene key type. Default is "UNIPROT".
+#' @param pAdjustMethod P value adjustment method. Default is "BH".
+#' @param use_internal_data use KEGG.db or latest online KEGG data. Default is FALSE.
+#' @param seed Seed for reproducibility. Default is 50.
+#' 
+#' @return GSEA object.
+#' 
+#' @details Performs a GSEA using GO or KEGG on one or multiple groups.
+#' 
+#' # Required libraries:
+#' * data.table
+#' * clusterProfiler
+#' 
+#' @author Victor Fanjul (2022-03-21)
+
+get_gsea <- function(dt, param_cols, 
+                     source_db = "GO",
+                     species = "org.Hs.eg.db", 
+                     ont = "BP", 
+                     name_col =  "Accession",
+                     keyType = "UNIPROT", 
+                     pAdjustMethod = "BH",
+                     use_internal_data = FALSE,
+                     seed = 50) {
+  
+  
+  groups <- gsub(".* z ", "", param_cols)
+  result <- c()
+  for (i in 1:length(param_cols)) {
+    prot_list <-  get_prot_list(dt, param_cols[i], name_col)
+    set.seed(seed)
+    if (source_db == "GO") {
+      gse <- gseGO(prot_list, 
+                   ont = ont,
+                   OrgDb = get(species),
+                   keyType = keyType,
+                   pvalueCutoff = 1,
+                   pAdjustMethod = pAdjustMethod,
+                   verbose = FALSE,
+                   seed = TRUE)
+    } else {
+      gse <- gseKEGG(prot_list,
+                     organism = species,
+                     keyType = tolower(keyType),
+                     pvalueCutoff = 1,
+                     pAdjustMethod = pAdjustMethod,
+                     verbose = FALSE,
+                     seed = TRUE,
+                     use_internal_data = use_internal_data)
+    }
+    gse@result$group <- groups[i]
+    result <- rbind(result, gse@result)
+  }
+  
+  result$group <- factor(result$group, levels = groups)
+  result <- result[order(result$p.adjust), ]
+  gse@result <- result
+  gse
+}
+
+
+
+#' Get Group GSEA
+#' 
+#' @description Filters a GSEA to obtain significant categories in a group.
+#' 
+#' @param gse GSEA object.
+#' @param dt Proteomics dataset.
+#' @param param_col Protein abundance column name.
+#' @param name_col Protein name column name. Default is "Accession".
+#' @param p_col P value column name. Default is "p.adjust".
+#' @param p_lim P value threshold. Default is 0.05.
+#' 
+#' @return GSEA object.
+#' 
+#' @details Filters a GSEA by group and p value.
+#' 
+#' # Required libraries:
+#' * data.table
+#' * clusterProfiler
+#' 
+#' @author Victor Fanjul (2022-03-27)
+
+get_gsea_group <- function(gse, dt, param_col, 
+                           name_col = "Accession",
+                           p_col = "p.adjust", 
+                           p_lim = 0.05) {
+  group <- gsub(".* z ", "", param_col)
+  gse@geneList <- get_prot_list(dt, param_col, name_col)
+  gse@result <- gse@result[gse@result$group == group & gse@result[, p_col] < p_lim, ]
+  rownames(gse@result) <- gse@result$ID
+  gse
+}
+
+
+
+#' Get Significant GSEA Categories
+#' 
+#' @description Filters a GSEA to obtain significant categories.
+#' 
+#' @param gse GSEA object.
+#' @param p_col P value column name. Default is "p.adjust".
+#' @param p_lim P value threshold. Default is 0.05.
+#' 
+#' @return GSEA object.
+#' 
+#' @details Filters a GSEA by p value.
+#' 
+#' # Required libraries:
+#' * data.table
+#' * clusterProfiler
+#' 
+#' @author Victor Fanjul (2022-03-21)
+
+get_gsea_sig <- function(gse, p_col = "p.adjust", p_lim = 0.05) {
+  sig_cat <- unique(gse@result[gse@result[, p_col] < p_lim, "Description"])
+  gse@result <- gse@result[gse@result$Description %in% sig_cat, ]
+  gse
+}
+
+
+
+#' Get GSEA Results in Long Format
+#' 
+#' @description Exports GSEA results in long format.
+#' 
+#' @param gse GSEA object.
+#' @param dt Proteomics dataset.
+#' @param param_cols Protein abundance column names.
+#' @param name_col Protein name column name. Default is "Accession".
+#' 
+#' @return GSEA results data table
+#' 
+#' @details Merges GSEA results with protein changes table and exports the 
+#' information in long format.
+#' 
+#' # Required libraries:
+#' * data.table
+#' * clusterProfiler
+#' 
+#' @author Victor Fanjul (2022-03-21)
+
+get_gsea_long <- function(gse, dt, param_cols, name_col = "Accession") {
+  gse <- as.data.table(gse@result)
+  rels <- unique(gse[, .(Accession = unlist(strsplit(core_enrichment, "/"))), Description])
+  gse <- gse[rels, on = "Description", allow.cartesian = TRUE]
+  
+  dt <- melt(dt[, .SD, .SDcols = c(name_col, param_cols)], name_col
+  )[, group := gsub(".* z ", "", variable)]
+  
+  dt <- merge(gse, dt, all.x = TRUE, sort = FALSE
+  )[order(-NES)
+  ][, group := factor(group, levels = gsub(".* z ", "", param_cols))
+  ][, Description := factor(Description, levels = unique(Description))
+  ][, core_enrichment := paste(Accession, collapse = "/"), Description
+  ]
+  dt
+}
+
+
+
+#' Get Protein cols
+#' 
+#' @description Extracts information from the protein name col in a proteomics 
 #' dataset and includes it as new columns.
 #' 
 #' @param dt Proteomics dataset.
-#' @param prot_field Protein column name.
+#' @param prot_col Protein column name.
 #' 
 #' @return Data table with additional columns.
 #' 
-#' @details Extracts informaiton for Accession, Entry_name and Protein_name.
+#' @details Extracts information for Accession, Entry_name and Protein_name.
 #' 
 #' # Required libraries:
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-10-19)
 
-get_prot_fields <- function(dt, prot_field) {
+get_prot_cols <- function(dt, prot_col) {
   
   dt <- as.data.table(dt)
-  dt <- dt[, aux := gsub(" PE=.*", "", gsub("^.*?\\|", "", get(prot_field)))
+  dt <- dt[, aux := gsub(" PE=.*", "", gsub("^.*?\\|", "", get(prot_col)))
   ][, Accession := gsub("\\|.*", "", aux)
   ][, aux := gsub("^[[:alnum:]]*\\|", "", aux)
   ][, Entry_name := gsub(" .*", "", aux)
@@ -203,14 +375,41 @@ get_prot_fields <- function(dt, prot_field) {
 
 
 
+#' Get Protein List
+#' 
+#' @description Generates a vector that lists proteins ordered by decreasing
+#' relative abundance.
+#' 
+#' @param dt Proteomics dataset.
+#' @param param_col Protein abundance column name.
+#' @param name_col Protein name column name. Default is "Accession".
+#' 
+#' @return Vector with named protein relative abundances.
+#' 
+#' @details Generates a vector that lists proteins ordered by decreasing
+#' relative abundance.
+#' 
+#' # Required libraries:
+#' * data.table
+#' 
+#' @author Victor Fanjul (2022-03-21)
+
+get_prot_list <- function(dt, param_col, name_col = "Accession") {
+  prot_list <- dt[, get(param_col)]
+  names(prot_list) <- dt[, get(name_col)]
+  sort(prot_list, decreasing = TRUE)
+}
+
+
+
 #' Optimize Threshold for Proteomics Changes
 #' 
 #' @description Determines the optimal threshold for proteomics changes considering
 #' z scores from WSSP and p values from limma.
 #' 
 #' @param dt Proteomics dataset.
-#' @param z_fields Vector of z score column names.
-#' @param p_fields Vector of p value column names.
+#' @param z_cols Vector of z score column names.
+#' @param p_cols Vector of p value column names.
 #' @param zlim Vector of z thresholds to asses. Default is 1.5.
 #' @param alpha Vector of alpha values to asses. Default is 0.05.
 #' @param maximize Metric to maximize in the optimization. Default is "f1".
@@ -227,7 +426,7 @@ get_prot_fields <- function(dt, prot_field) {
 #' 
 #' @author Victor Fanjul (2021-08-28 29)
 
-optimize_zlim <- function(dt, z_fields, p_fields, 
+optimize_zlim <- function(dt, z_cols, p_cols, 
                           zlim = 1.5, 
                           alpha = 0.05,
                           maximize = "f1") {
@@ -235,11 +434,11 @@ optimize_zlim <- function(dt, z_fields, p_fields,
   dt <- as.data.table(dt)
   metrics <- data.table(variable = 0, zlim = 0, alpha = 0, tn = 0, fn = 0, fp = 0, tp = 0)[-1]
   
-  for (var in 1:length(z_fields)) for (i in zlim) for (j in alpha) {
+  for (var in 1:length(z_cols)) for (i in zlim) for (j in alpha) {
     metrics <- rbind(metrics, 
-                     unlist(list(z_fields[var], i, j, 
-                                 as.list(dt[, .(table(z = abs(get(z_fields[var])) >= i, 
-                                                      p = get(p_fields[var]) < j))
+                     unlist(list(z_cols[var], i, j, 
+                                 as.list(dt[, .(table(z = abs(get(z_cols[var])) >= i, 
+                                                      p = get(p_cols[var]) < j))
                                  ][order(z, p)][, N])), recursive = FALSE))
     
   }
@@ -271,7 +470,7 @@ optimize_zlim <- function(dt, z_fields, p_fields,
 #' @param values Vector of value column names.
 #' @param colors Vector of group colors.
 #' @param zlim Threshold for determining change in z (positive number).
-#' @param prot_field Protein column name.
+#' @param prot_col Protein column name.
 #' @param xlab Label for x axis. Default is "Differentially expressed proteins".
 #' 
 #' @return Barplot
@@ -283,13 +482,13 @@ optimize_zlim <- function(dt, z_fields, p_fields,
 #' 
 #' @author Victor Fanjul (2021-10-18)
 
-plot_bars <- function(dt, groups, values, colors, zlim, prot_field,
+plot_bars <- function(dt, groups, values, colors, zlim, prot_col,
                       xlab = "Differentially expressed proteins") {
   
   dt <- as.data.table(dt)
   dtn <- dt[, .N]
   
-  dt <- melt(dt, id.vars = prot_field, measure.vars = values
+  dt <- melt(dt, id.vars = prot_col, measure.vars = values
   )[abs(value) >= zlim, .(.N, rel = round(.N/dtn*100, 1)), variable]
   
   groups <- rev(groups)[1:dt[, .N]]
@@ -416,6 +615,115 @@ plot_facets <- function(dt, x, y, FUN = NULL, ...) {
   par(mfrow = arrange_facets(facets))
   for (i in 1:facets) FUN(dt, x[i], y[i], ...)
   par(mfrow = c(1, 1))
+}
+
+
+
+#' Make GSEA Cnet Plot
+#' 
+#' @description Makes a GSEA cnet plot.
+#' 
+#' @param gse GSEA object.
+#' @param category_color Color for categories. Default is "grey30".
+#' @param change_colors Vector with color scale for z. Default is c("dodgerblue", "white", "red").
+#' @param sat_lim Color saturation z threshold. Default is 3.
+#' @param layout Graph layout. Default is "nicely".
+#' @param max.overlaps Number of label overlaps allowed. Default is 15.
+#' @param seed Seed for reproducibility. Default is 50.
+#' 
+#' @return Cnet plot.
+#' 
+#' @details Fill color denotes change in z.
+#' 
+#' # Required libraries:
+#' * data.table
+#' * ggplot2
+#' * ggrepel
+#' * ggridges
+#' * scales
+#' 
+#' @author Victor Fanjul (2022-03-27)
+
+plot_gsea_cnet <- function(gse,
+                           category_color = "grey30", 
+                           change_colors = c("dodgerblue", "white", "red"),
+                           sat_lim = 3,
+                           layout = "nicely",
+                           max.overlaps = 15,
+                           seed = 50) {
+  
+  lim <- max(abs(gse@geneList))
+  
+  set.seed(seed)
+  cnet <- cnetplot(gse, 
+                   showCategory	= nrow(gse), 
+                   foldChange = gse@geneList,
+                   node_label = "none", 
+                   layout = layout, # nicely sphere kk linear circle
+                   cex_category = 0.5) +
+    scale_color_gradientn(colors = change_colors[c(1, 1, 2, 3, 3)], 
+                          values = rescale(c(-lim, -sat_lim, 0, sat_lim, lim)),
+                          limits = c(-lim, lim), guide = "none") + 
+    theme(legend.position = "none") 
+  
+  cnet$data$name[!is.na(cnet$data$color)] <- NA
+  cnet[["layers"]][[2]][["mapping"]][["colour_new"]][[2]][[2]] <- category_color
+  
+  set.seed(seed)
+  cnet <- cnet + geom_text_repel(aes_(x = ~x, y = ~y, label = ~name), bg.color = "white", 
+                                 max.overlaps = max.overlaps, cex = 3, bg.r = 0.1)
+  print(cnet)
+}
+
+
+
+#' Make GSEA Ridge Plot
+#' 
+#' @description Makes a GSEA ridge plot.
+#' 
+#' @param dt Proteomics dataset.
+#' @param xlab X axis label.
+#' @param x_col X axis column name. Default is "value".
+#' @param y_col Y axis column name. Default is "Description".
+#' @param p_col P value column name. Default is "p.adjust".
+#' @param group_col Group column name. Default is "group".
+#' @param change_colors Vector with color scale for x. Default is c("dodgerblue", "white", "red").
+#' @param sat_lim Color saturation z threshold. Default is 3.
+#' @param xlim Vector of x axis limits. Default is c(-6, 6).
+#' 
+#' @return Ridges plot.
+#' 
+#' @details Fill color denotes change in x. Line color denotes whether the element
+#' has significant (black) or non-significan changes (grey).
+#' 
+#' # Required libraries:
+#' * data.table
+#' * ggplot2
+#' * ggridges
+#' * scales
+#' 
+#' @author Victor Fanjul (2022-03-21)
+
+plot_gsea_ridges <- function(dt, xlab,
+                             x_col = "value", 
+                             y_col = "Description", 
+                             p_col = "p.adjust", 
+                             group_col = "group",
+                             change_colors = c("dodgerblue", "white", "red"), 
+                             sat_lim = 3, 
+                             xlim = c(-6, 6)) {
+  lim <- max(abs(summary(dt[, get(x_col)])[c(1, 6)]))
+  
+  print(ggplot(dt, aes(x = get(x_col), y = get(y_col), fill = stat(x), color = get(p_col) < 0.05)) + 
+          geom_density_ridges_gradient(rel_min_height = 0.01) +
+          facet_grid(cols = vars(get(group_col))) +
+          scale_color_manual(values = c("grey70", "black"), guide = "none") +
+          scale_fill_gradientn(colors = change_colors[c(1, 1, 2, 3, 3)], 
+                               values = rescale(c(-lim, -sat_lim, 0, sat_lim, lim)),
+                               limits = c(-lim, lim), guide = "none") +
+          coord_cartesian(xlim = xlim) +
+          xlab(xlab) + ylab(NULL)
+  )
 }
 
 
@@ -594,13 +902,14 @@ plot_qq <- function(dt, x, ...) {
 
 
 
+
 #' Make Volcano Plot
 #' 
 #' @description Makes a volcano plot.
 #' 
 #' @param dt Proteomics dataset.
-#' @param z_field Z score column name.
-#' @param p_field P value column name.
+#' @param z_col Z score column name.
+#' @param p_col P value column name.
 #' @param zlim Z threshold Default is 1.5.
 #' @param alpha Alpha threshold. Default is 0.05.
 #' @param cex Point size. Default is 0.5.
@@ -623,7 +932,7 @@ plot_qq <- function(dt, x, ...) {
 #' 
 #' @author Victor Fanjul (2021-08-28)
 
-plot_volcano <- function(dt, z_field, p_field, 
+plot_volcano <- function(dt, z_col, p_col, 
                          zlim = 1.5, 
                          alpha = 0.05,
                          cex = 0.5,
@@ -635,16 +944,16 @@ plot_volcano <- function(dt, z_field, p_field,
   dt <- as.data.table(dt)
   
   par(pch = 16, cex = 1)
-  plot(-log10(get(p_field)) ~ get(z_field), dt,
-       xlab = z_field, ylab = bquote(~-Log[10]~ "p value"), 
+  plot(-log10(get(p_col)) ~ get(z_col), dt,
+       xlab = z_col, ylab = bquote(~-Log[10]~ "p value"), 
        xlim = xlim, ylim = ylim, col = 0, pch = 16)
   
-  filter <- list(dt[abs(get(z_field)) >= zlim & get(p_field) < alpha],
-                 dt[abs(get(z_field)) >= zlim & get(p_field) >= alpha],
-                 dt[abs(get(z_field)) < zlim & get(p_field) < alpha],
-                 dt[abs(get(z_field)) < zlim & get(p_field) >= alpha])
+  filter <- list(dt[abs(get(z_col)) >= zlim & get(p_col) < alpha],
+                 dt[abs(get(z_col)) >= zlim & get(p_col) >= alpha],
+                 dt[abs(get(z_col)) < zlim & get(p_col) < alpha],
+                 dt[abs(get(z_col)) < zlim & get(p_col) >= alpha])
   
-  for (i in 1:4)  points(-log10(get(p_field)) ~ get(z_field), 
+  for (i in 1:4)  points(-log10(get(p_col)) ~ get(z_col), 
                          filter[[i]], cex = cex, 
                          col = adjustcolor(color[i], alpha.f = transp[i]))
   
