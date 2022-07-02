@@ -1,14 +1,76 @@
 #### Proteomics results analysis
 ## Created by: Victor Fanjul, Aug-2021
 
+#### Setup ####
+all_org <- data.frame("species" = c("Anopheles gambiae",
+                                    "Arabidopsis thaliana",
+                                    "Bos taurus",
+                                    "Caenorhabditis elegans",
+                                    "Canis lupus familiaris",
+                                    "Danio rerio",
+                                    "Drosophila melanogaster",
+                                    "Escherichia coli K-12 MG1655",
+                                    "Escherichia coli O157:H7 Sakai",
+                                    "Gallus gallus",
+                                    "Homo sapiens",
+                                    "Macaca mulatta",
+                                    "Mus musculus",
+                                    "Myxococcus xanthus DK 1622",
+                                    "Pan troglodytes",
+                                    "Plasmodium falciparum 3D7",
+                                    "Rattus norvegicus",
+                                    "Saccharomyces cerevisiae",
+                                    "Sus scrofa",
+                                    "Xenopus laevis"),
+                      "go" = c("org.Ag.eg.db",
+                               "org.At.tair.db",
+                               "org.Bt.eg.db",
+                               "org.Ce.eg.db",
+                               "org.Cf.eg.db",
+                               "org.Dr.eg.db",
+                               "org.Dm.eg.db",
+                               "org.EcK12.eg.db",
+                               "org.EcSakai.eg.db",
+                               "org.Gg.eg.db",
+                               "org.Hs.eg.db",
+                               "org.Mmu.eg.db",
+                               "org.Mm.eg.db",
+                               "org.Mxanthus.db",
+                               "org.Pt.eg.db",
+                               "org.Pf.plasmo.db",
+                               "org.Rn.eg.db",
+                               "org.Sc.sgd.db",
+                               "org.Ss.eg.db",
+                               "org.Xl.eg.db"),
+                      "kegg" = c("aga",
+                                 "ath",
+                                 "bta",
+                                 "cel",
+                                 "cfa",
+                                 "dre",
+                                 "dme",
+                                 "eco",
+                                 "ecs",
+                                 "gga",
+                                 "hsa",
+                                 "mcc",
+                                 "mmu",
+                                 "mxa",
+                                 "ptr",
+                                 "pfa",
+                                 "rno",
+                                 "sce",
+                                 "ssc",
+                                 "xla"))
+
+
+
 #### Load functions ####
 
 libraries <- c("data.table", 
                "openxlsx",
                "BiocManager")
 
-bioc_libraries <- c("org.Mm.eg.db", 
-                    "GOstats")
 
 
 #### New functions ####
@@ -96,34 +158,34 @@ write_excel <- function(dt, file, worksheet, sample_cols, p_value_cols,
                         change_colors = c("dodgerblue", "white", "red"),
                         enhance_colors = c("limegreen", "white")) {
   
-  data_fields <- names(dt)
+  data_cols <- names(dt)
   wb <- createWorkbook()
   addWorksheet(wb, worksheet)
   writeData(wb, worksheet, dt, withFilter = TRUE)
   
   conditionalFormatting(wb, worksheet,
-                        cols = which(data_fields %in% sample_cols), 
+                        cols = which(data_cols %in% sample_cols), 
                         rows = 1:nrow(dt) + 1,
                         style = change_colors,
                         rule = c(-sat_lim, 0, sat_lim),
                         type = "colourScale")
   
   conditionalFormatting(wb, worksheet,
-                        cols = which(data_fields %in% p_value_cols), 
+                        cols = which(data_cols %in% p_value_cols), 
                         rows = 1:nrow(dt) + 1,
                         style = enhance_colors,
                         rule = c(0, 0.05),
                         type = "colourScale")
   
   conditionalFormatting(wb, worksheet,
-                        cols = which(data_fields %in% change_cols), 
+                        cols = which(data_cols %in% change_cols), 
                         rows = 1:nrow(dt) + 1,
                         style = change_colors,
                         rule = c(-1, 0, 1),
                         type = "colourScale")
   
   conditionalFormatting(wb, worksheet,
-                        cols = which(data_fields %in% np_col), 
+                        cols = which(data_cols %in% np_col), 
                         rows = 1:nrow(dt) + 1,
                         style = enhance_colors,
                         rule = c(1, 2),
