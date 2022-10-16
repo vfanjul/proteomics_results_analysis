@@ -30,11 +30,12 @@ bioc_libraries <- c("limma", "clusterProfiler", "enrichplot", "ggrepel")
 #' # Required libraries:
 #' * data.table
 #' 
-#' @author Victor Fanjul (2021-12-05)
+#' @author Victor Fanjul (2021-12-05). V02 (2022-10-15)
 
 add_group_means <- function(dt, samples_by_group, group_mean_cols, 
                             case_delta_cols, ctrl_mean_col,
                             rel_to = "control_mean") {
+  samples <- unlist(samples_by_group)
   
   dt <- as.data.table(dt)
   dt[, (group_mean_cols) := lapply(samples_by_group,
@@ -43,8 +44,8 @@ add_group_means <- function(dt, samples_by_group, group_mean_cols,
   if (rel_to != "control_mean") {
     dt[, (case_delta_cols) := lapply(setdiff(group_mean_cols, ctrl_mean_col), 
                                      function(x) get(x) - get(ctrl_mean_col))
-    # ][, `∆ mean z` := rowMeans(.SD), .SDcols = case_delta_cols]
-    ]
+    ][, (paste0("∆ ", samples)) := lapply(samples, 
+                                          function(x) get(x) - get(ctrl_mean_col))]
   }
   dt
 }
@@ -320,21 +321,23 @@ get_gsea_sig <- function(gse, p_col = "p.adjust", p_lim = 0.05) {
 #' * data.table
 #' * clusterProfiler
 #' 
-#' @author Victor Fanjul (2022-03-21)
+#' @author Victor Fanjul (2022-03-21). V02 (2022-10-15)
 
-get_gsea_long <- function(gse, dt, param_cols, name_col = "Accession") {
+get_gsea_long <- function(gse, dt, param_cols, name_col, accession_col = "Accession") {
   gse <- as.data.table(gse@result)
   rels <- unique(gse[, .(Accession = unlist(strsplit(core_enrichment, "/"))), Description])
+  names(rels)[2] <- accession_col
   gse <- gse[rels, on = "Description", allow.cartesian = TRUE]
   
-  dt <- melt(dt[, .SD, .SDcols = c(name_col, param_cols)], name_col
+  dt <- melt(dt[, .SD, .SDcols = c(name_col, accession_col, param_cols)], 
+             c(accession_col, name_col)
   )[, group := gsub(".* z ", "", variable)]
   
   dt <- merge(gse, dt, all.x = TRUE, sort = FALSE
   )[order(-NES)
   ][, group := factor(group, levels = gsub(".* z ", "", param_cols))
   ][, Description := factor(Description, levels = unique(Description))
-  ][, core_enrichment := paste(Accession, collapse = "/"), Description
+  ][, core_enrichment := paste(get(accession_col), collapse = "/"), Description
   ]
   dt
 }
@@ -895,7 +898,7 @@ plot_qq <- function(dt, x, ...) {
   qqPlot(dt[, get(x)], 
          xlab = "Theoretical normal quantiles",
          ylab = paste(x, " quantiles"), 
-         col.lines = "red", pch = 16, cex = 0.5, id = FALSE)
+         col.lines = "red", pch = 16, cex = 0.5, id = FALSE, ylim = c(-20, 20))
   
   par(mar = c(5.1, 4.1, 4.1, 2.1))
 }

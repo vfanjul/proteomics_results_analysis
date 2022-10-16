@@ -16,6 +16,7 @@ fdr_quant <- 0.01 # False discovery rate for quantification
 zlims <- seq(1, 3, 0.1)
 alphas <- c(0.01, 0.05)
 sat_lim <- 3 # Saturation limit for plots
+sat_lim_95 <- TRUE # Saturation limit is percentile 95
 adj.pvalue <- TRUE # Adjust p value
 
 ## Artifact Proteins
