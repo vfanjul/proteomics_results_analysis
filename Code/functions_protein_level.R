@@ -31,7 +31,6 @@ bioc_libraries <- c("limma", "clusterProfiler", "enrichplot", "ggrepel", "KEGG.d
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-12-05). V02 (2022-10-15)
-
 add_group_means <- function(dt, samples_by_group, group_mean_cols, 
                             case_delta_cols, ctrl_mean_col,
                             rel_to = "control_mean") {
@@ -61,7 +60,6 @@ add_group_means <- function(dt, samples_by_group, group_mean_cols,
 #' @return Vector with number of rows and columns.
 #' 
 #' @author Victor Fanjul (2021-08-29)
-
 arrange_facets <- function(facets) {
   plot_rows <- ifelse(facets == 3, 1, round(sqrt(facets), 0))
   plot_cols <- ifelse(facets == 3, 3, ceiling(facets/plot_rows))
@@ -88,7 +86,6 @@ arrange_facets <- function(facets) {
 #' * limma (Bioconductor)
 #' 
 #' @author Victor Fanjul (2021-12-05)
-
 fit_limma <- function(dt, samples, sample_groups) {
   
   dt <- as.data.table(dt)[, .SD, .SDcols = samples]
@@ -131,7 +128,6 @@ fit_limma <- function(dt, samples, sample_groups) {
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-12-05)
-
 flag_artifacts <- function(dt, prot_col, 
                            rm_artifacts = TRUE, 
                            exclude_pattern = "trypsin|keratin", 
@@ -143,6 +139,7 @@ flag_artifacts <- function(dt, prot_col,
             get(prot_col), ignore.case = TRUE), (artifact_col) := TRUE]
   }
 }
+
 
 
 #' Flag Inconsistent in Proteomics Dataset
@@ -165,7 +162,6 @@ flag_artifacts <- function(dt, prot_col,
 #' * data.table
 #' 
 #' @author Victor Fanjul (2025-02-09)
-
 flag_inconsistent <- function (dt, ctrl_samples, 
                                rm_inconsistent = TRUE, 
                                quant_lim = 0.99,
@@ -177,23 +173,7 @@ flag_inconsistent <- function (dt, ctrl_samples,
     dt[, (inconsistent_col) := get(sd_col) > quantile(get(sd_col), quant_lim, na.rm = TRUE)]
   }
 }
-# flag_inconsistent <- function (dt, samples,
-#                                z_lim = 10,
-#                                n_extreme_lim = 2,
-#                                median_lim = 1,
-#                                mad_lim = 1.5) {
-#   
-#   dt[, c("n_extreme_Zq", "median_Zq", "MAD_Zq") := {
-#     z <- unlist(.SD, use.names = FALSE)
-#     list(sum(abs(z) >= z_lim, na.rm = TRUE),
-#       median(z, na.rm = TRUE),
-#       mad(z, na.rm = TRUE))
-#   }, .SDcols = samples, by = seq_len(nrow(dt))]
-#   
-#   dt[, Inconsistent_Zq := n_extreme_Zq <= n_extreme_lim & n_extreme_Zq > 0 &
-#        abs(median_Zq) < median_lim & MAD_Zq < mad_lim]
-#   dt
-# }
+
 
 
 #' Flag Changes in Z
@@ -213,8 +193,7 @@ flag_inconsistent <- function (dt, ctrl_samples,
 #' # Required libraries:
 #' * data.table
 #' 
-#' @author Victor Fanjul (date)
-# 2021-12-05
+#' @author Victor Fanjul (2021-12-05)
 flag_z_changes <- function(dt, case_param_cols, case_change_cols, zlim) {
   
   dt <- as.data.table(dt)
@@ -248,112 +227,6 @@ flag_z_changes <- function(dt, case_param_cols, case_change_cols, zlim) {
 #' * clusterProfiler
 #' 
 #' @author Victor Fanjul (2022-03-21) V2 (2026-02-12)
-
-# get_gsea <- function(dt, param_cols, 
-#                      source_db = "GO",
-#                      species = "org.Hs.eg.db", 
-#                      ont = "BP", 
-#                      name_col =  "Accession",
-#                      keyType = "UNIPROT", 
-#                      pAdjustMethod = "BH",
-#                      use_internal_data = FALSE,
-#                      seed = 50) {
-#   
-#   
-#   groups <- gsub(".* z ", "", param_cols)
-#   result <- c()
-#   for (i in 1:length(param_cols)) {
-#     prot_list <-  get_prot_list(dt, param_cols[i], name_col)
-#     set.seed(seed)
-#     if (source_db == "GO") {
-#       gse <- gseGO(prot_list, 
-#                    ont = ont,
-#                    OrgDb = get(species),
-#                    keyType = keyType,
-#                    pvalueCutoff = 1,
-#                    pAdjustMethod = pAdjustMethod,
-#                    verbose = FALSE,
-#                    seed = TRUE)
-#     } else {
-#       gse <- gseKEGG(prot_list,
-#                      organism = species,
-#                      keyType = tolower(keyType),
-#                      pvalueCutoff = 1,
-#                      pAdjustMethod = pAdjustMethod,
-#                      verbose = FALSE,
-#                      seed = TRUE,
-#                      use_internal_data = use_internal_data)
-#     }
-#     gse@result$group <- groups[i]
-#     result <- rbind(result, gse@result)
-#   }
-#   
-#   result$group <- factor(result$group, levels = groups)
-#   result <- result[order(result$p.adjust), ]
-#   gse@result <- result
-#   gse
-# }
-
-# get_gsea <- function(dt, param_cols,
-#                      source_db = "GO",
-#                      species = "Homo sapiens", 
-#                      ont = "BP", 
-#                      name_col =  "Accession",
-#                      keyType = "UNIPROT", 
-#                      kegg_db = NULL,
-#                      pAdjustMethod = "BH",
-#                      seed = 50) {
-#   
-#   org_db <- map_org(species)
-#   
-#   groups <- gsub(".* z ", "", param_cols)
-#   result <- c()
-#   for (i in 1:length(param_cols)) {
-#     prot_list <-  get_prot_list(dt, param_cols[i], name_col)
-#     set.seed(seed)
-#     if (source_db == "GO") {
-#       gse <- gseGO(prot_list, 
-#                    ont = ont,
-#                    OrgDb = get(org_db$go),
-#                    keyType = keyType,
-#                    pvalueCutoff = 1,
-#                    pAdjustMethod = pAdjustMethod,
-#                    verbose = FALSE,
-#                    seed = TRUE)
-#     } else if (source_db == "KEGG" & !is.null(kegg_db)) {
-#       ids <- as.data.table(bitr(names(prot_list),
-#                                 fromType = keyType,
-#                                 toType = "ENTREZID",
-#                                 OrgDb = get(org_db$go)))
-#       
-#       merged_ids <- merge(ids, data.table(OldID = names(prot_list), Value = as.numeric(prot_list)),
-#                           by.x = keyType, by.y = "OldID"
-#       )[, .SD[which.max(abs(Value))], by = ENTREZID]
-#       kegg_list <- merged_ids$Value
-#       names(kegg_list) <- merged_ids$ENTREZID
-#       kegg_list <- sort(kegg_list, decreasing = TRUE)
-#       
-#       # kegg_paths <- get_kegg_db(species)
-#       
-#       # gse <- GSEA(prot_list, 
-#       gse <- GSEA(kegg_list, 
-#                   TERM2GENE = kegg_db$path2gene,
-#                   TERM2NAME = kegg_db$path2name,
-#                   pvalueCutoff = 1,
-#                   pAdjustMethod = pAdjustMethod,
-#                   seed = TRUE,
-#                   verbose = FALSE)
-#     }
-#     gse@result$group <- groups[i]
-#     result <- rbind(result, gse@result)
-#   }
-#   
-#   result$group <- factor(result$group, levels = groups)
-#   result <- result[order(result$p.adjust), ]
-#   gse@result <- result
-#   gse
-# }
-
 get_gsea <- function(dt, param_cols,
                      source_db = "GO",
                      species = "Homo sapiens", 
@@ -384,9 +257,6 @@ get_gsea <- function(dt, param_cols,
       gse <- GSEA(prot_list,
                   TERM2GENE = kegg_db$path2gene,
                   TERM2NAME = kegg_db$path2name,
-                  # minGSSize = 15,
-                  # scoreType = "pos",
-                  # pvalueCutoff = 0.05,
                   pvalueCutoff = 1,
                   pAdjustMethod = pAdjustMethod,
                   seed = TRUE,
@@ -401,6 +271,7 @@ get_gsea <- function(dt, param_cols,
   gse@result <- result
   gse
 }
+
 
 
 #' Get Group GSEA
@@ -423,7 +294,6 @@ get_gsea <- function(dt, param_cols,
 #' * clusterProfiler
 #' 
 #' @author Victor Fanjul (2022-03-27). V02 (2026-02-22)
-
 get_gsea_group <- function(gse, dt, param_col, 
                            name_col = "Accession",
                            filter_col = "p.adjust", 
@@ -457,7 +327,6 @@ get_gsea_group <- function(gse, dt, param_col,
 #' * clusterProfiler
 #' 
 #' @author Victor Fanjul (2022-03-21). V02 (2026-02-22)
-
 get_gsea_sig <- function(gse, 
                          filter_col = "p.adjust", 
                          lim = 0.05) {
@@ -491,7 +360,6 @@ get_gsea_sig <- function(gse,
 #' * clusterProfiler
 #' 
 #' @author Victor Fanjul (2022-03-21). V02 (2022-10-15). V03 (2026-02-22)
-
 get_gsea_long <- function(gse, dt, param_cols, 
                           name_col = "Protein", 
                           id_col = "Accession") {
@@ -541,29 +409,6 @@ get_gsea_long <- function(gse, dt, param_cols,
 #' * data.table
 #' 
 #' @author Victor Fanjul (2026-02-12)
-
-# get_kegg_db <- function(species = "Homo sapiens", 
-#                         keyType = "UNIPROT") {
-#   org_db <- map_org(species)
-#   
-#   p2g <- fread(paste0("https://rest.kegg.jp/link/", org_db$kegg, "/pathway"), 
-#                header = FALSE, col.names = c("pathway", "gene")
-#   )[, pathway := gsub("path:", "", pathway)][, gene := gsub(".*:", "", gene)]
-#   
-#   ids <- as.data.table(bitr(p2g$gene,
-#                             fromType = "ENTREZID",
-#                             toType = keyType,
-#                             OrgDb = get(org_db$go)))
-#   p2g <- merge(p2g[, .(pathway, ENTREZID = gene)], ids, allow.cartesian = TRUE, sort = FALSE)[, 2:3]
-#   names(p2g)[2] <- "gene"
-#   
-#   p2n <- fread(paste0("https://rest.kegg.jp/list/pathway/", org_db$kegg), 
-#                header = FALSE, col.names = c("pathway", "name")
-#   )[, name := gsub(paste0(" - ", species, ".*"), "", name)]
-#   
-#   list(path2gene = p2g, path2name = p2n)
-# }
-
 get_kegg_db <- function(species = "Homo sapiens", 
                         l1_blacklist = "organismal|disease|drug",
                         l2_blacklist = "virus|prokaryote|maps|terpenoid|secondary metabolite|xenobiotic",
@@ -612,6 +457,7 @@ get_kegg_db <- function(species = "Homo sapiens",
 }
 
 
+
 #' Get Protein cols
 #' 
 #' @description Extracts information from the protein name col (Uniprot FASTA) 
@@ -631,7 +477,6 @@ get_kegg_db <- function(species = "Homo sapiens",
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-10-19). V2 (2026-02-16).
-
 get_prot_cols <- function(dt, prot_col, 
                           species = "Homo sapiens") {
   
@@ -693,8 +538,6 @@ get_prot_cols <- function(dt, prot_col,
 
 
 
-
-
 #' Get Protein List
 #' 
 #' @description Generates a vector that lists proteins ordered by decreasing
@@ -713,7 +556,6 @@ get_prot_cols <- function(dt, prot_col,
 #' * data.table
 #' 
 #' @author Victor Fanjul (2022-03-21). V2 (2026-02-16).
-
 get_prot_list <- function(dt, param_col, name_col = "Accession") {
   
   # Remove missing values and ids, 
@@ -753,7 +595,6 @@ get_prot_list <- function(dt, param_col, name_col = "Accession") {
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-08-28 29)
-
 optimize_zlim <- function(dt, z_cols, p_cols, 
                           zlim = 1.5, 
                           alpha = 0.05,
@@ -809,7 +650,6 @@ optimize_zlim <- function(dt, z_cols, p_cols,
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-10-18)
-
 plot_bars <- function(dt, groups, values, colors, zlim, prot_col,
                       xlab = "Differentially expressed proteins") {
   
@@ -852,14 +692,12 @@ plot_bars <- function(dt, groups, values, colors, zlim, prot_col,
 #' * GGally
 #' 
 #' @author Victor Fanjul (2021-10-18)
-
 plot_corrpairs <- function(dt, samples, 
                            color = "red") {
   dt <- as.data.table(dt)
   ggpairs(dt[, samples, with = FALSE],
           lower = list(continuous = wrap("smooth", color = color, size = 0.5)))
 }
-
 
 
 
@@ -880,7 +718,6 @@ plot_corrpairs <- function(dt, samples,
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-10-17) V2 (2025-02-08)
-
 plot_dendrogram <- function(dt, samples, 
                             method = "complete",
                             scale = TRUE) {
@@ -896,6 +733,7 @@ plot_dendrogram <- function(dt, samples,
        labels = samples, main = "", xlab = "", sub = "", hang = -1)
   par(mgp = c(3, 1, 0), tck = NA)
 }
+
 
 
 #' Plot Euler Diagram
@@ -916,7 +754,6 @@ plot_dendrogram <- function(dt, samples,
 #' * eulerr
 #' 
 #' @author Victor Fanjul (2021-10-18)
-
 plot_euler <- function(dt, vars, labels, colors) {
   
   dt <- as.data.table(dt)
@@ -943,7 +780,6 @@ plot_euler <- function(dt, vars, labels, colors) {
 #' @return Multi-faceted plot.
 #' 
 #' @author Victor Fanjul (2021-08-29)
-
 plot_facets <- function(dt, x, y, FUN = NULL, ...) {
   facets <- length(x)
   par(mfrow = arrange_facets(facets))
@@ -1040,7 +876,6 @@ plot_gsea_cnet <- function(gse,
 #' * scales
 #' 
 #' @author Victor Fanjul (2022-03-21)
-
 plot_gsea_ridges <- function(dt, xlab,
                              x_col = "value", 
                              y_col = "Description", 
@@ -1087,7 +922,6 @@ plot_gsea_ridges <- function(dt, xlab,
 #' @return Legend plot
 #' 
 #' @author Victor Fanjul (2021-11-20)
-
 plot_legend <- function(groups, colors) {
   
   par(xpd = TRUE, mar = c(0.1, 0.1, 0.1, 0.1))
@@ -1119,7 +953,6 @@ plot_legend <- function(groups, colors) {
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-10-17) V2 (2025-02-08)
-
 plot_pca <- function(dt, samples, colors, groups, 
                      comp_x = 1, 
                      comp_y = 2,
@@ -1160,7 +993,6 @@ plot_pca <- function(dt, samples, colors, groups,
 #' * gplots
 #' 
 #' @author Victor Fanjul (2021-12-06)
-
 plot_prot_heatmap <- function(dt, samples, change_cols, sample_colors, label_col, 
                               sat_lim = 3, 
                               change_colors = c("dodgerblue", "white", "red")) {
@@ -1202,7 +1034,6 @@ plot_prot_heatmap <- function(dt, samples, change_cols, sample_colors, label_col
 #' * gplots
 #' 
 #' @author Victor Fanjul (2021-11-20)
-
 plot_prot_heatmap_key <- function(sat_lim = 3, 
                                   change_colors = c("dodgerblue", "white", "red")) {
   
@@ -1216,7 +1047,6 @@ plot_prot_heatmap_key <- function(sat_lim = 3,
   
   par(mar = c(5.1, 4.1, 4.1, 2.1), mgp = c(3, 1, 0), tck = NA, cex.axis = 1)
 }
-
 
 
 
@@ -1237,7 +1067,6 @@ plot_prot_heatmap_key <- function(sat_lim = 3,
 #' * car
 #' 
 #' @author Victor Fanjul (2021-10-17)
-
 plot_qq <- function(dt, x, ...) {
   
   dt <- as.data.table(dt)
@@ -1250,7 +1079,6 @@ plot_qq <- function(dt, x, ...) {
   
   par(mar = c(5.1, 4.1, 4.1, 2.1))
 }
-
 
 
 
@@ -1282,7 +1110,6 @@ plot_qq <- function(dt, x, ...) {
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-08-28)
-
 plot_volcano <- function(dt, z_col, p_col, 
                          zlim = 1.5, 
                          alpha = 0.05,
