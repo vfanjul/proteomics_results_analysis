@@ -6,7 +6,7 @@
 libraries <- c("car", "eulerr", "GGally", "gplots", "ggplot2", "ggnewscale", 
                "ggridges", "scales")
 
-bioc_libraries <- c("limma", "clusterProfiler", "enrichplot", "ggrepel")
+bioc_libraries <- c("limma", "clusterProfiler", "enrichplot", "ggrepel", "KEGG.db")
 # org.Ss.eg.db org.Mm.eg.db
 
 
