@@ -706,17 +706,25 @@ get_prot_cols <- function(dt, prot_col,
 #' 
 #' @return Vector with named protein relative abundances.
 #' 
-#' @details Generates a vector that lists proteins ordered by decreasing
-#' relative abundance.
+#' @details Generates a vector that lists proteins ordered by decreasing relative 
+#' abundance. If there are duplicate ids, the one with max abs value prevails.
 #' 
 #' # Required libraries:
 #' * data.table
 #' 
-#' @author Victor Fanjul (2022-03-21)
+#' @author Victor Fanjul (2022-03-21). V2 (2026-02-16).
 
 get_prot_list <- function(dt, param_col, name_col = "Accession") {
-  prot_list <- dt[, get(param_col)]
-  names(prot_list) <- dt[, get(name_col)]
+  
+  # Remove missing values and ids, 
+  clean_dt <- as.data.table(dt)[!is.na(get(name_col)) & !is.na(get(param_col))]
+  
+  # If duplicate ids, keep that with the max abs value
+  clean_dt <- clean_dt[, .SD[which.max(abs(get(param_col)))], by = name_col]
+  
+  # Extract value, name and sort by decreasing value
+  prot_list <- clean_dt[[param_col]]
+  names(prot_list) <- clean_dt[[name_col]]
   sort(prot_list, decreasing = TRUE)
 }
 
