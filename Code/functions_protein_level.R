@@ -977,7 +977,9 @@ plot_facets <- function(dt, x, y, FUN = NULL, ...) {
 #' * scales
 #' 
 #' @author Victor Fanjul (2022-03-27)
-
+rescale.AsIs <- function(x, to = c(0, 1), from = range(x, na.rm = TRUE, finite = TRUE), ...) {
+  scales::rescale(as.vector(x), to = to, from = from, ...)
+}
 plot_gsea_cnet <- function(gse,
                            category_color = "grey30", 
                            change_colors = c("dodgerblue", "white", "red"),
@@ -986,7 +988,8 @@ plot_gsea_cnet <- function(gse,
                            max.overlaps = 15,
                            seed = 50) {
   
-  lim <- max(abs(gse@geneList))
+  lim <- as.numeric(max(abs(gse@geneList)))
+  scaled_values <- (c(-lim, -sat_lim, 0, sat_lim, lim) - (-lim)) / (2 * lim)
   
   set.seed(seed)
   cnet <- cnetplot(gse, 
@@ -996,11 +999,11 @@ plot_gsea_cnet <- function(gse,
                    layout = layout, # nicely sphere kk linear circle
                    cex_category = 0.5) +
     scale_color_gradientn(colors = change_colors[c(1, 1, 2, 3, 3)], 
-                          values = rescale(c(-lim, -sat_lim, 0, sat_lim, lim)),
+                          values = scaled_values,
                           limits = c(-lim, lim), guide = "none") + 
     theme(legend.position = "none") 
   
-  cnet$data$name[!is.na(cnet$data$color)] <- NA
+  cnet$data$name[!is.na(as.vector(cnet$data$color))] <- NA
   cnet[["layers"]][[2]][["mapping"]][["colour_new"]][[2]][[2]] <- category_color
   
   set.seed(seed)
