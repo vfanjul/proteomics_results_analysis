@@ -22,7 +22,6 @@ libraries <- c("data.table",
 #' of Bioconductor libraries.
 #' 
 #' @author Victor Fanjul (2021-08-01)
-
 get_libraries <- function(general_libraries, 
                           bioc_libraries = NULL) {
   
@@ -45,7 +44,6 @@ get_libraries <- function(general_libraries,
 #' @param bioconductor Whether libraries are from Bioconductor. Default is FALSE.
 #' 
 #' @author Victor Fanjul (2021-08-01)
-
 get_repo_libraries <- function(libraries, 
                                bioconductor = FALSE) {
   
@@ -76,7 +74,6 @@ get_repo_libraries <- function(libraries,
 #' # Required libraries: NA
 #' 
 #' @author Victor Fanjul (2026-02-16)
-
 map_org <- function(species = "Homo sapiens") {
   org_db <- data.frame("species" = c("Anopheles gambiae",
                                      "Arabidopsis thaliana",
@@ -169,7 +166,6 @@ map_org <- function(species = "Homo sapiens") {
 #' * openxlsx
 #' 
 #' @author Victor Fanjul (2021-12-05)
-
 write_excel <- function(dt, file, worksheet, sample_cols, p_value_cols, 
                         change_cols, np_col, 
                         sat_lim = 3,
