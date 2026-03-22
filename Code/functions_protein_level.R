@@ -231,9 +231,9 @@ flag_z_changes <- function(dt, case_param_cols, case_change_cols, zlim) {
 #' @param dt Proteomics dataset.
 #' @param param_cols Protein abundance column names.
 #' @param source_db GSEA based on GO or KEGG. Default is "GO".
-#' @param species Species in a format compatible with source db. Default is "org.Hs.eg.db".
+#' @param species Scientific name of the organism. Default is "Homo sapiens".
 #' @param ont Ontology in GO. Default is "BP".
-#' @param name_col Protein name column name. Default is "Accession".
+#' @param name_col Protein name column name (Accession for GO and Entrez for KEGG). Default is "Accession".
 #' @param keyType Gene key type. Default is "UNIPROT".
 #' @param pAdjustMethod P value adjustment method. Default is "BH".
 #' @param use_internal_data use KEGG.db or latest online KEGG data. Default is FALSE.
@@ -247,20 +247,126 @@ flag_z_changes <- function(dt, case_param_cols, case_change_cols, zlim) {
 #' * data.table
 #' * clusterProfiler
 #' 
-#' @author Victor Fanjul (2022-03-21)
+#' @author Victor Fanjul (2022-03-21) V2 (2026-02-12)
 
-get_gsea <- function(dt, param_cols, 
+# get_gsea <- function(dt, param_cols, 
+#                      source_db = "GO",
+#                      species = "org.Hs.eg.db", 
+#                      ont = "BP", 
+#                      name_col =  "Accession",
+#                      keyType = "UNIPROT", 
+#                      pAdjustMethod = "BH",
+#                      use_internal_data = FALSE,
+#                      seed = 50) {
+#   
+#   
+#   groups <- gsub(".* z ", "", param_cols)
+#   result <- c()
+#   for (i in 1:length(param_cols)) {
+#     prot_list <-  get_prot_list(dt, param_cols[i], name_col)
+#     set.seed(seed)
+#     if (source_db == "GO") {
+#       gse <- gseGO(prot_list, 
+#                    ont = ont,
+#                    OrgDb = get(species),
+#                    keyType = keyType,
+#                    pvalueCutoff = 1,
+#                    pAdjustMethod = pAdjustMethod,
+#                    verbose = FALSE,
+#                    seed = TRUE)
+#     } else {
+#       gse <- gseKEGG(prot_list,
+#                      organism = species,
+#                      keyType = tolower(keyType),
+#                      pvalueCutoff = 1,
+#                      pAdjustMethod = pAdjustMethod,
+#                      verbose = FALSE,
+#                      seed = TRUE,
+#                      use_internal_data = use_internal_data)
+#     }
+#     gse@result$group <- groups[i]
+#     result <- rbind(result, gse@result)
+#   }
+#   
+#   result$group <- factor(result$group, levels = groups)
+#   result <- result[order(result$p.adjust), ]
+#   gse@result <- result
+#   gse
+# }
+
+# get_gsea <- function(dt, param_cols,
+#                      source_db = "GO",
+#                      species = "Homo sapiens", 
+#                      ont = "BP", 
+#                      name_col =  "Accession",
+#                      keyType = "UNIPROT", 
+#                      kegg_db = NULL,
+#                      pAdjustMethod = "BH",
+#                      seed = 50) {
+#   
+#   org_db <- map_org(species)
+#   
+#   groups <- gsub(".* z ", "", param_cols)
+#   result <- c()
+#   for (i in 1:length(param_cols)) {
+#     prot_list <-  get_prot_list(dt, param_cols[i], name_col)
+#     set.seed(seed)
+#     if (source_db == "GO") {
+#       gse <- gseGO(prot_list, 
+#                    ont = ont,
+#                    OrgDb = get(org_db$go),
+#                    keyType = keyType,
+#                    pvalueCutoff = 1,
+#                    pAdjustMethod = pAdjustMethod,
+#                    verbose = FALSE,
+#                    seed = TRUE)
+#     } else if (source_db == "KEGG" & !is.null(kegg_db)) {
+#       ids <- as.data.table(bitr(names(prot_list),
+#                                 fromType = keyType,
+#                                 toType = "ENTREZID",
+#                                 OrgDb = get(org_db$go)))
+#       
+#       merged_ids <- merge(ids, data.table(OldID = names(prot_list), Value = as.numeric(prot_list)),
+#                           by.x = keyType, by.y = "OldID"
+#       )[, .SD[which.max(abs(Value))], by = ENTREZID]
+#       kegg_list <- merged_ids$Value
+#       names(kegg_list) <- merged_ids$ENTREZID
+#       kegg_list <- sort(kegg_list, decreasing = TRUE)
+#       
+#       # kegg_paths <- get_kegg_db(species)
+#       
+#       # gse <- GSEA(prot_list, 
+#       gse <- GSEA(kegg_list, 
+#                   TERM2GENE = kegg_db$path2gene,
+#                   TERM2NAME = kegg_db$path2name,
+#                   pvalueCutoff = 1,
+#                   pAdjustMethod = pAdjustMethod,
+#                   seed = TRUE,
+#                   verbose = FALSE)
+#     }
+#     gse@result$group <- groups[i]
+#     result <- rbind(result, gse@result)
+#   }
+#   
+#   result$group <- factor(result$group, levels = groups)
+#   result <- result[order(result$p.adjust), ]
+#   gse@result <- result
+#   gse
+# }
+
+get_gsea <- function(dt, param_cols,
                      source_db = "GO",
-                     species = "org.Hs.eg.db", 
+                     species = "Homo sapiens", 
                      ont = "BP", 
                      name_col =  "Accession",
                      keyType = "UNIPROT", 
+                     kegg_db = NULL,
                      pAdjustMethod = "BH",
-                     use_internal_data = FALSE,
                      seed = 50) {
   
+  org_db <- map_org(species)
   
-  groups <- gsub(".* z ", "", param_cols)
+  groups <- gsub(".* (z|statistic) ", "", param_cols)
   result <- c()
   for (i in 1:length(param_cols)) {
     prot_list <-  get_prot_list(dt, param_cols[i], name_col)
@@ -268,21 +374,23 @@ get_gsea <- function(dt, param_cols,
     if (source_db == "GO") {
       gse <- gseGO(prot_list, 
                    ont = ont,
-                   OrgDb = get(species),
+                   OrgDb = get(org_db$go),
                    keyType = keyType,
                    pvalueCutoff = 1,
                    pAdjustMethod = pAdjustMethod,
                    verbose = FALSE,
                    seed = TRUE)
-    } else {
-      gse <- gseKEGG(prot_list,
-                     organism = species,
-                     keyType = tolower(keyType),
-                     pvalueCutoff = 1,
-                     pAdjustMethod = pAdjustMethod,
-                     verbose = FALSE,
-                     seed = TRUE,
-                     use_internal_data = use_internal_data)
+    } else if (source_db == "KEGG" & !is.null(kegg_db)) {
+      gse <- GSEA(prot_list,
+                  TERM2GENE = kegg_db$path2gene,
+                  TERM2NAME = kegg_db$path2name,
+                  # minGSSize = 15,
+                  # scoreType = "pos",
+                  # pvalueCutoff = 0.05,
+                  pvalueCutoff = 1,
+                  pAdjustMethod = pAdjustMethod,
+                  seed = TRUE,
+                  verbose = FALSE)
     }
     gse@result$group <- groups[i]
     result <- rbind(result, gse@result)
