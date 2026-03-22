@@ -102,7 +102,7 @@ fit_limma <- function(dt, samples, sample_groups) {
   rownames(model_matrix) <- samples
   colnames(model_matrix) <- groups
   
-  contrasts <- apply(combn(groups, 2), 2, paste, collapse = "-")
+  contrasts <- apply(combn(groups, 2), 2, function(x) paste(x[2], x[1], sep = "-"))
   cont_matrix <- makeContrasts(contrasts = contrasts, levels = model_matrix)
   
   fit <- lmFit(dt, model_matrix)
