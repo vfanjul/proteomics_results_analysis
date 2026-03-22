@@ -1046,18 +1046,30 @@ plot_gsea_ridges <- function(dt, xlab,
                              y_col = "Description", 
                              p_col = "p.adjust", 
                              group_col = "group",
+                             nes_col = "NES", 
                              change_colors = c("dodgerblue", "white", "red"), 
                              sat_lim = 3, 
-                             xlim = c(-6, 6)) {
+                             xlim = c(-4, 4)) {
   lim <- max(abs(summary(dt[, get(x_col)])[c(1, 6)]))
   
+  nes_dt <- unique(dt[, .(NES = get(nes_col), 
+                          y_val = get(y_col), 
+                          group = get(group_col))])
+  
   print(ggplot(dt, aes(x = get(x_col), y = get(y_col), fill = stat(x), color = get(p_col) < 0.05)) + 
-          geom_density_ridges_gradient(rel_min_height = 0.01) +
+          geom_density_ridges_gradient(rel_min_height = 0.01, scale = 1.2) +
+          geom_segment(data = nes_dt, 
+                       aes(x = NES, xend = NES, 
+                           y = as.numeric(factor(y_val)), 
+                           yend = as.numeric(factor(y_val)) + 0.9), 
+                       inherit.aes = FALSE, size = 1.2) +
+          geom_vline(xintercept = 0, linetype = "dashed", color = "grey30", alpha = 0.5) +
           facet_grid(cols = vars(get(group_col))) +
           scale_color_manual(values = c("grey70", "black"), guide = "none") +
           scale_fill_gradientn(colors = change_colors[c(1, 1, 2, 3, 3)], 
                                values = rescale(c(-lim, -sat_lim, 0, sat_lim, lim)),
                                limits = c(-lim, lim), guide = "none") +
+
           coord_cartesian(xlim = xlim) +
           xlab(xlab) + ylab(NULL)
   )
