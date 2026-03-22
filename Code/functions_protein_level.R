@@ -1109,6 +1109,7 @@ plot_legend <- function(groups, colors) {
 #' @param groups Vector of groups.
 #' @param comp_x Component displayed in x axis. Default is 1.
 #' @param comp_y Component displayed in y axis. Default is 2.
+#' @param scale Whether to scale samples. Default is FALSE.
 #' 
 #' @return PCA plot
 #' 
@@ -1117,14 +1118,15 @@ plot_legend <- function(groups, colors) {
 #' # Required libraries:
 #' * data.table
 #' 
-#' @author Victor Fanjul (2021-10-17)
+#' @author Victor Fanjul (2021-10-17) V2 (2025-02-08)
 
 plot_pca <- function(dt, samples, colors, groups, 
                      comp_x = 1, 
-                     comp_y = 2) {
+                     comp_y = 2,
+                     scale = FALSE) {
   
   dt <- as.data.table(dt)
-  protpca <- prcomp(t(dt[, .SD, .SDcols = samples]), scale. = TRUE)
+  protpca <- prcomp(t(dt[, .SD, .SDcols = samples]), scale. = scale)
   
   par(xpd = TRUE, mar = c(3,3,1,1), mgp = c(1.5,0.25,0), tck = - 0.01)
   plot(protpca$x[, c(comp_x, comp_y)], col = colors, pch = 19)
