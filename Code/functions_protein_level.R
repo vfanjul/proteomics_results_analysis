@@ -478,7 +478,8 @@ get_gsea_sig <- function(gse,
 #' @param gse GSEA object.
 #' @param dt Proteomics dataset.
 #' @param param_cols Protein abundance column names.
-#' @param name_col Protein name column name. Default is "Accession".
+#' @param name_col Protein name column name. Default is "Protein".
+#' @param id_col Protein name column name. Default is "Accession".
 #' 
 #' @return GSEA results data table
 #' 
@@ -489,49 +490,155 @@ get_gsea_sig <- function(gse,
 #' * data.table
 #' * clusterProfiler
 #' 
-#' @author Victor Fanjul (2022-03-21). V02 (2022-10-15)
+#' @author Victor Fanjul (2022-03-21). V02 (2022-10-15). V03 (2026-02-22)
 
-get_gsea_long <- function(gse, dt, param_cols, name_col, accession_col = "Accession") {
+get_gsea_long <- function(gse, dt, param_cols, 
+                          name_col = "Protein", 
+                          id_col = "Accession") {
   gse <- as.data.table(gse@result)
-  rels <- unique(gse[, .(Accession = unlist(strsplit(core_enrichment, "/"))), Description])
-  names(rels)[2] <- accession_col
-  gse <- gse[rels, on = "Description", allow.cartesian = TRUE]
+  # rels <- unique(gse[, .(unlist(strsplit(core_enrichment, "/"))), ID])
+  rels <- unique(rbindlist(lapply(names(gsea_kegg@geneSets),
+                         function(x) data.table(ID = x, gsea_kegg@geneSets[[x]]))))
+  names(rels)[2] <- id_col
   
-  dt <- melt(dt[, .SD, .SDcols = c(name_col, accession_col, param_cols)], 
-             c(accession_col, name_col)
-  )[, group := gsub(".* z ", "", variable)]
+  # gse <- merge(gse, rels, by = "ID", allow.cartesian = TRUE, sort = FALSE)
+  gse <- gse[rels, on = "ID", nomatch = NULL, allow.cartesian = TRUE]
   
+  dt <- melt(dt[, .SD, .SDcols = c(name_col, id_col, param_cols)],
+             c(id_col, name_col)
+  )[, group := gsub(".* (z|statistic) ", "", variable)]
+
   dt <- merge(gse, dt, all.x = TRUE, sort = FALSE
   )[order(-NES)
-  ][, group := factor(group, levels = gsub(".* z ", "", param_cols))
+  ][, group := factor(group, levels = gsub(".* (z|statistic) ", "", param_cols))
   ][, Description := factor(Description, levels = unique(Description))
-  ][, core_enrichment := paste(get(accession_col), collapse = "/"), Description
+  ][, core_enrichment := paste(get(id_col), collapse = "/"), Description
   ]
   dt
 }
 
 
 
+#' Get KEGG Database
+#' 
+#' @description Gets KEGG path names and gene relations.
+#' 
+#' @param species Scientific name of the organism. Default is "Homo sapiens".
+#' @param keyType Gene key type. Default is "UNIPROT". (not if no id translation)
+#' @param l1_blacklist Blacklist pattern for level 1 KEGG categories. Default is "organismal|disease|drug".
+#' @param l2_blacklist Blacklist pattern for level 2 KEGG categories. Default is "virus|prokaryote".
+#' @param l3_blacklist Blacklist pattern for pathways (level 3). Default is "null".
+#' @param l2_whitelist Pattern to exclude from blacklist at level 2. Default is "null".
+#' @param l3_whitelist Pattern to exclude from blacklist at level 2. Default is "null".
+#' 
+#' @return List with path to gene, path to name and path to category KEGG data tables. 
+#' Filters categories and pathways to exclude those blacklisted and not those whitelisted.
+#' 
+#' @details 
+#' 
+#' # Required libraries:
+# * clusterProfiler (not if no id translation)
+#' * data.table
+#' 
+#' @author Victor Fanjul (2026-02-12)
+
+# get_kegg_db <- function(species = "Homo sapiens", 
+#                         keyType = "UNIPROT") {
+#   org_db <- map_org(species)
+#   
+#   p2g <- fread(paste0("https://rest.kegg.jp/link/", org_db$kegg, "/pathway"), 
+#                header = FALSE, col.names = c("pathway", "gene")
+#   )[, pathway := gsub("path:", "", pathway)][, gene := gsub(".*:", "", gene)]
+#   
+#   ids <- as.data.table(bitr(p2g$gene,
+#                             fromType = "ENTREZID",
+#                             toType = keyType,
+#                             OrgDb = get(org_db$go)))
+#   p2g <- merge(p2g[, .(pathway, ENTREZID = gene)], ids, allow.cartesian = TRUE, sort = FALSE)[, 2:3]
+#   names(p2g)[2] <- "gene"
+#   
+#   p2n <- fread(paste0("https://rest.kegg.jp/list/pathway/", org_db$kegg), 
+#                header = FALSE, col.names = c("pathway", "name")
+#   )[, name := gsub(paste0(" - ", species, ".*"), "", name)]
+#   
+#   list(path2gene = p2g, path2name = p2n)
+# }
+
+get_kegg_db <- function(species = "Homo sapiens", 
+                        l1_blacklist = "organismal|disease|drug",
+                        l2_blacklist = "virus|prokaryote|maps|terpenoid|secondary metabolite|xenobiotic",
+                        l3_blacklist = "plant|-.*bacter|photosynthesis|carbon fixation|cutin|sulfoquinovose|lipopolysaccharide|o-antigen|peptidoglycan|teichoic|phosphotransferase|lipoarabin|exopolysac|ubiquinone|two-component|- other$|bacterial secretion|chemotaxis|flagellar|methane|mycolic",
+                        l2_whitelist = "null",
+                        l3_whitelist = "terpenoid backbone|p450|drug metabolism",
+                        gene_blacklist = NULL) {
+  
+  # Select species DB names
+  org_db <- map_org(species)
+  
+  # Get pathway - gene relations
+  p2g <- fread(paste0("https://rest.kegg.jp/link/", org_db$kegg, "/pathway"), 
+               header = FALSE, col.names = c("pathway", "gene")
+  )[, pathway := gsub("path:", "", pathway)][, gene := gsub(".*:", "", gene)]
+  if (!is.null(gene_blacklist)) p2g <- p2g[!gene %in% gene_blacklist]
+  
+  # Get pathway name and hierarchy
+  brite <- fread("https://rest.kegg.jp/get/br:br08901", sep = "\n", header = FALSE, col.names = "raw")
+  brite[, raw := gsub("<[^>]+>", "", raw)]
+  brite[, L1 := fifelse(startsWith(raw, "A"), trimws(substring(raw, 2)), NA_character_)]
+  brite[, L2 := fifelse(startsWith(raw, "B"), trimws(substring(raw, 2)), NA_character_)]
+  brite[, L1 := L1[1], by = cumsum(!is.na(L1))]
+  brite[, L2 := L2[1], by = cumsum(!is.na(L2))]
+  
+  p2c <- brite[startsWith(raw, "C")][, .(L1, L2, 
+                                         pathway = paste0(sel_org$kegg, sub(".*([0-9]{5}).*", "\\1", raw)),
+                                         name = trimws(sub("C\\s*[0-9]{5}\\s*", "", raw)))]
+  p2c <- p2c[pathway != ""]
+  
+  # Exclude blacklisted pathways
+  p2c[grepl(l3_blacklist, name, ignore.case = TRUE)
+      & !grepl(l3_whitelist, name, ignore.case = TRUE), exclude := 1]
+  
+  p2c[(grepl(l1_blacklist, L1, ignore.case = TRUE) 
+       | grepl(l2_blacklist, L2, ignore.case = TRUE)) 
+      & !grepl(l2_whitelist, L2, ignore.case = TRUE) 
+      & !grepl(l3_whitelist, name, ignore.case = TRUE), exclude := 1]
+  
+  # p2c <- p2c[is.na(exclude)][, exclude := NULL]
+  p2n <- p2c[is.na(exclude), .(pathway, name)]
+  p2g <- p2g[pathway %in% p2n$pathway]
+  
+  # Output DB
+  list(path2gene = p2g, path2name = p2n, path2category = p2c)
+}
+
+
 #' Get Protein cols
 #' 
-#' @description Extracts information from the protein name col in a proteomics 
-#' dataset and includes it as new columns.
+#' @description Extracts information from the protein name col (Uniprot FASTA) 
+#' in a proteomics dataset and includes it as new columns.
 #' 
 #' @param dt Proteomics dataset.
 #' @param prot_col Protein column name.
+#' @param species Scientific name of the organism. Default is "Homo sapiens".
 #' 
 #' @return Data table with additional columns.
 #' 
-#' @details Extracts information for Accession, Entry_name and Protein_name.
+#' @details Extracts information for (Uniprot) Accession, Entry_name, Protein_name, 
+#' Gene, and Entrez (id). Entrez conversion is done in tiers using the other 
+#' columns as starting point.
 #' 
 #' # Required libraries:
 #' * data.table
 #' 
-#' @author Victor Fanjul (2021-10-19)
+#' @author Victor Fanjul (2021-10-19). V2 (2026-02-16).
 
-get_prot_cols <- function(dt, prot_col) {
+get_prot_cols <- function(dt, prot_col, 
+                          species = "Homo sapiens") {
   
+  # Ensure data.table format
   dt <- as.data.table(dt)
+  
+  # Generate columns and extract information
   dt <- dt[, aux := gsub(" PE=.*", "", gsub("^.*?\\|", "", get(prot_col)))
   ][, Accession := gsub("\\|.*", "", aux)
   ][, aux := gsub("^[[:alnum:]]*\\|", "", aux)
@@ -539,10 +646,52 @@ get_prot_cols <- function(dt, prot_col) {
   ][, aux := gsub("^.*? ", "", aux)
   ][grep(" GN=", aux), Gene := gsub(".* GN=", "", aux)
   ][, Protein_name := gsub(" OS=.*", "", aux)
+  ][, Entrez := NA_character_
   ][, aux := NULL
   ]
+  
+  # Set up for Entrez id conversion
+  org_db <- map_org(species)$go
+  
+  tiers <- data.table(col = c("Gene", "Accession"),
+                      type = c("SYMBOL", "UNIPROT"))
+  
+  
+  for (i in 1:nrow(tiers)) {
+    # Check for remaining NAs and ensure the source column isn't NA
+    missing_mask <- is.na(dt$Entrez) & !is.na(dt[[tiers$col[i]]])
+    
+    if (any(missing_mask)) {
+      
+      # Map to Entrez id
+      query_vals <- unique(dt[[tiers$col[i]]][missing_mask])
+      
+      map_res <- suppressWarnings(suppressMessages(as.data.table(
+        bitr(query_vals, 
+             fromType = tiers$type[i], 
+             toType = "ENTREZID", 
+             OrgDb = org_db))))
+      
+      if (nrow(map_res) > 0) {
+        # Ensure 1:1 mapping by taking the first match
+        map_res <- unique(map_res, by = tiers$type[i])
+        
+        # Update Entrez column in-place
+        dt[missing_mask, Entrez := map_res[dt[missing_mask], 
+                                           on = setNames(tiers$col[i], tiers$type[i]), 
+                                           x.ENTREZID]]
+      }
+    }
+  }
+  
+  # Clean up and return data
+  dt[, Entrez := as.character(Entrez)]
+  
+  message(paste0("Entrez mapping success: ", round(mean(!is.na(dt$Entrez)) * 100, 2), "%"))
   dt
 }
+
+
 
 
 
