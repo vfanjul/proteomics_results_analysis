@@ -1,70 +1,6 @@
 #### Proteomics results analysis
 ## Created by: Victor Fanjul, Aug-2021
 
-#### Setup ####
-all_org <- data.frame("species" = c("Anopheles gambiae",
-                                    "Arabidopsis thaliana",
-                                    "Bos taurus",
-                                    "Caenorhabditis elegans",
-                                    "Canis lupus familiaris",
-                                    "Danio rerio",
-                                    "Drosophila melanogaster",
-                                    "Escherichia coli K-12 MG1655",
-                                    "Escherichia coli O157:H7 Sakai",
-                                    "Gallus gallus",
-                                    "Homo sapiens",
-                                    "Macaca mulatta",
-                                    "Mus musculus",
-                                    "Myxococcus xanthus DK 1622",
-                                    "Pan troglodytes",
-                                    "Plasmodium falciparum 3D7",
-                                    "Rattus norvegicus",
-                                    "Saccharomyces cerevisiae",
-                                    "Sus scrofa",
-                                    "Xenopus laevis"),
-                      "go" = c("org.Ag.eg.db",
-                               "org.At.tair.db",
-                               "org.Bt.eg.db",
-                               "org.Ce.eg.db",
-                               "org.Cf.eg.db",
-                               "org.Dr.eg.db",
-                               "org.Dm.eg.db",
-                               "org.EcK12.eg.db",
-                               "org.EcSakai.eg.db",
-                               "org.Gg.eg.db",
-                               "org.Hs.eg.db",
-                               "org.Mmu.eg.db",
-                               "org.Mm.eg.db",
-                               "org.Mxanthus.db",
-                               "org.Pt.eg.db",
-                               "org.Pf.plasmo.db",
-                               "org.Rn.eg.db",
-                               "org.Sc.sgd.db",
-                               "org.Ss.eg.db",
-                               "org.Xl.eg.db"),
-                      "kegg" = c("aga",
-                                 "ath",
-                                 "bta",
-                                 "cel",
-                                 "cfa",
-                                 "dre",
-                                 "dme",
-                                 "eco",
-                                 "ecs",
-                                 "gga",
-                                 "hsa",
-                                 "mcc",
-                                 "mmu",
-                                 "mxa",
-                                 "ptr",
-                                 "pfa",
-                                 "rno",
-                                 "sce",
-                                 "ssc",
-                                 "xla"))
-
-
-
 #### Load functions ####
 
 libraries <- c("data.table", 
@@ -124,6 +60,88 @@ get_repo_libraries <- function(libraries,
                                        library, 
                                        character.only = TRUE)
   
+}
+
+
+
+#' Map Organism Names
+#' 
+#' @description Generates a table with the organism name mappings from species to
+#' GO and KEGG.
+#' 
+#' @param species Scientific name of the organism. Default is "Homo sapiens".
+#' 
+#' @return Data frame.
+#' 
+#' # Required libraries: NA
+#' 
+#' @author Victor Fanjul (2026-02-16)
+
+map_org <- function(species = "Homo sapiens") {
+  org_db <- data.frame("species" = c("Anopheles gambiae",
+                                     "Arabidopsis thaliana",
+                                     "Bos taurus",
+                                     "Caenorhabditis elegans",
+                                     "Canis lupus familiaris",
+                                     "Danio rerio",
+                                     "Drosophila melanogaster",
+                                     "Escherichia coli K-12 MG1655",
+                                     "Escherichia coli O157:H7 Sakai",
+                                     "Gallus gallus",
+                                     "Homo sapiens",
+                                     "Macaca mulatta",
+                                     "Mus musculus",
+                                     "Myxococcus xanthus DK 1622",
+                                     "Pan troglodytes",
+                                     "Plasmodium falciparum 3D7",
+                                     "Rattus norvegicus",
+                                     "Saccharomyces cerevisiae",
+                                     "Sus scrofa",
+                                     "Xenopus laevis"),
+                       "go" = c("org.Ag.eg.db",
+                                "org.At.tair.db",
+                                "org.Bt.eg.db",
+                                "org.Ce.eg.db",
+                                "org.Cf.eg.db",
+                                "org.Dr.eg.db",
+                                "org.Dm.eg.db",
+                                "org.EcK12.eg.db",
+                                "org.EcSakai.eg.db",
+                                "org.Gg.eg.db",
+                                "org.Hs.eg.db",
+                                "org.Mmu.eg.db",
+                                "org.Mm.eg.db",
+                                "org.Mxanthus.db",
+                                "org.Pt.eg.db",
+                                "org.Pf.plasmo.db",
+                                "org.Rn.eg.db",
+                                "org.Sc.sgd.db",
+                                "org.Ss.eg.db",
+                                "org.Xl.eg.db"),
+                       "kegg" = c("aga",
+                                  "ath",
+                                  "bta",
+                                  "cel",
+                                  "cfa",
+                                  "dre",
+                                  "dme",
+                                  "eco",
+                                  "ecs",
+                                  "gga",
+                                  "hsa",
+                                  "mcc",
+                                  "mmu",
+                                  "mxa",
+                                  "ptr",
+                                  "pfa",
+                                  "rno",
+                                  "sce",
+                                  "ssc",
+                                  "xla"))
+  
+  org_db <- org_db[org_db$species %in% species, ]
+  if (nrow(org_db) == 0) stop("Species not found in all_org table. Check spelling!")
+  org_db
 }
 
 
