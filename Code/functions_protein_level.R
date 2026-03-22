@@ -869,7 +869,8 @@ plot_corrpairs <- function(dt, samples,
 #' 
 #' @param dt Proteomics dataset.
 #' @param samples Vector of sample z column names.
-#' @param method Agglomeration clustering method. Default is "average".
+#' @param method Agglomeration clustering method. Default is "complete".
+#' @param scale Whether to scale samples. Default is TRUE
 #' 
 #' @return Dendrogram plot.
 #' 
@@ -878,18 +879,23 @@ plot_corrpairs <- function(dt, samples,
 #' # Required libraries:
 #' * data.table
 #' 
-#' @author Victor Fanjul (2021-10-17)
+#' @author Victor Fanjul (2021-10-17) V2 (2025-02-08)
 
 plot_dendrogram <- function(dt, samples, 
-                            method = "average") {
+                            method = "complete",
+                            scale = TRUE) {
   
   dt <- as.data.table(dt)
+  
+  if (scale) dt[, (samples) := as.data.table(
+    t(scale(t(.SD), center = TRUE, scale = TRUE))
+  ), .SDcols = samples]
+  
   par(mgp = c(1.5, 0.25, 0), tck = - 0.01)
   plot(hclust(dist(t(dt[, .SD, .SDcols = samples])), method = method), 
        labels = samples, main = "", xlab = "", sub = "", hang = -1)
   par(mgp = c(3, 1, 0), tck = NA)
 }
-
 
 
 #' Plot Euler Diagram
