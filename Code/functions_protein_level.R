@@ -403,7 +403,6 @@ get_gsea <- function(dt, param_cols,
 }
 
 
-
 #' Get Group GSEA
 #' 
 #' @description Filters a GSEA to obtain significant categories in a group.
@@ -412,8 +411,8 @@ get_gsea <- function(dt, param_cols,
 #' @param dt Proteomics dataset.
 #' @param param_col Protein abundance column name.
 #' @param name_col Protein name column name. Default is "Accession".
-#' @param p_col P value column name. Default is "p.adjust".
-#' @param p_lim P value threshold. Default is 0.05.
+#' @param filter_col Columm name of variable to filter. Default is "p.adjust".
+#' @param lim Abs limit to filter. Default is 0.05.
 #' 
 #' @return GSEA object.
 #' 
@@ -423,15 +422,17 @@ get_gsea <- function(dt, param_cols,
 #' * data.table
 #' * clusterProfiler
 #' 
-#' @author Victor Fanjul (2022-03-27)
+#' @author Victor Fanjul (2022-03-27). V02 (2026-02-22)
 
 get_gsea_group <- function(gse, dt, param_col, 
                            name_col = "Accession",
-                           p_col = "p.adjust", 
-                           p_lim = 0.05) {
+                           filter_col = "p.adjust", 
+                           lim = 0.05) {
   group <- gsub(".* z ", "", param_col)
   gse@geneList <- get_prot_list(dt, param_col, name_col)
-  gse@result <- gse@result[gse@result$group == group & gse@result[, p_col] < p_lim, ]
+  if (filter_col == "NES") {
+    gse@result <- gse@result[gse@result$group == group & abs(gse@result[, filter_col]) > lim, ]
+  } else gse@result <- gse@result[gse@result$group == group & gse@result[, filter_col] < lim, ]
   rownames(gse@result) <- gse@result$ID
   gse
 }
@@ -443,21 +444,27 @@ get_gsea_group <- function(gse, dt, param_col,
 #' @description Filters a GSEA to obtain significant categories.
 #' 
 #' @param gse GSEA object.
-#' @param p_col P value column name. Default is "p.adjust".
-#' @param p_lim P value threshold. Default is 0.05.
+#' @param filter_col Columm name of variable to filter. Default is "p.adjust".
+#' @param lim Abs limit to filter. Default is 0.05.
 #' 
 #' @return GSEA object.
 #' 
-#' @details Filters a GSEA by p value.
+#' @details Filters a GSEA by p value. If there are multiple comparison groups
+#' Categories will be retained for all groups when at least one fits the selection criteria.
 #' 
 #' # Required libraries:
 #' * data.table
 #' * clusterProfiler
 #' 
-#' @author Victor Fanjul (2022-03-21)
+#' @author Victor Fanjul (2022-03-21). V02 (2026-02-22)
 
-get_gsea_sig <- function(gse, p_col = "p.adjust", p_lim = 0.05) {
-  sig_cat <- unique(gse@result[gse@result[, p_col] < p_lim, "Description"])
+get_gsea_sig <- function(gse, 
+                         filter_col = "p.adjust", 
+                         lim = 0.05) {
+  if (filter_col == "NES") {
+    sig_cat <- unique(gse@result[abs(gse@result[, filter_col]) > lim, "Description"])
+  } else sig_cat <- unique(gse@result[gse@result[, filter_col] < lim, "Description"])
+
   gse@result <- gse@result[gse@result$Description %in% sig_cat, ]
   gse
 }
