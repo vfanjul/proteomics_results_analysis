@@ -1288,7 +1288,7 @@ plot_volcano <- function(dt, z_col, p_col,
                          alpha = 0.05,
                          cex = 0.5,
                          xlim = c(-5, 5),
-                         ylim = c(0, 5),
+                         ylim = c(0, 4),
                          color = c("red", "dodgerblue", "limegreen", "grey40"),
                          transp = c(0.8, 0.6, 0.6, 0.4)) {
   
