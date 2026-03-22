@@ -119,8 +119,8 @@ fit_limma <- function(dt, samples, sample_groups) {
 #' 
 #' @param dt Proteomics dataset.
 #' @param prot_col Protein column name.
-#' @param rm_artifacts Whether to remove artifacts (TRUE/FALSE).
-#' @param exclude_pattern Vector of artifact name patterns.
+#' @param rm_artifacts Whether to remove artifacts. Default is TRUE.
+#' @param exclude_pattern Vector of artifact name patterns. Default is "trypsin|keratin".
 #' @param artifact_col Name for artifact column. Default is "Artifact".
 #' 
 #' @return Data table with additional column.
@@ -132,8 +132,11 @@ fit_limma <- function(dt, samples, sample_groups) {
 #' 
 #' @author Victor Fanjul (2021-12-05)
 
-flag_artifacts <- function(dt, prot_col, rm_artifacts, exclude_pattern, 
+flag_artifacts <- function(dt, prot_col, 
+                           rm_artifacts = TRUE, 
+                           exclude_pattern = "trypsin|keratin", 
                            artifact_col = "Artifact") {
+  
   dt <- as.data.table(dt)[, (artifact_col) := FALSE]
   if (rm_artifacts) {
     dt[grep(paste0(exclude_pattern, collapse = "|"), 
@@ -141,6 +144,56 @@ flag_artifacts <- function(dt, prot_col, rm_artifacts, exclude_pattern,
   }
 }
 
+
+#' Flag Inconsistent in Proteomics Dataset
+#' 
+#' @description Adds a column that flags proteins with highly inconsistent
+#' expression across controls and another with the SD of controls.
+#' 
+#' @param dt Proteomics dataset.
+#' @param ctrl_samples Column names with control samples.
+#' @param rm_inconsistent Whether to remove artifacts. Default is TRUE.
+#' @param quant_lim Threshold quantile to consider inconsistency.
+#' @param sd_col Name for SD column. Default is "SD control".
+#' @param inconsistent_col Name for inconsistent column. Default is "Inconsistent".
+#' 
+#' @return Data table with additional columns.
+#' 
+#' @details 
+#' 
+#' # Required libraries:
+#' * data.table
+#' 
+#' @author Victor Fanjul (2025-02-09)
+
+flag_inconsistent <- function (dt, ctrl_samples, 
+                               rm_inconsistent = TRUE, 
+                               quant_lim = 0.99,
+                               sd_col = "SD control",
+                               inconsistent_col = "Inconsistent") {
+  dt <- as.data.table(dt)[, (inconsistent_col) := FALSE]
+  if (rm_inconsistent) {
+    dt[, (sd_col) := sqrt(rowMeans((.SD - rowMeans(.SD, na.rm = TRUE))^2, na.rm = TRUE)), .SDcols = ctrl_samples]
+    dt[, (inconsistent_col) := get(sd_col) > quantile(get(sd_col), quant_lim, na.rm = TRUE)]
+  }
+}
+# flag_inconsistent <- function (dt, samples,
+#                                z_lim = 10,
+#                                n_extreme_lim = 2,
+#                                median_lim = 1,
+#                                mad_lim = 1.5) {
+#   
+#   dt[, c("n_extreme_Zq", "median_Zq", "MAD_Zq") := {
+#     z <- unlist(.SD, use.names = FALSE)
+#     list(sum(abs(z) >= z_lim, na.rm = TRUE),
+#       median(z, na.rm = TRUE),
+#       mad(z, na.rm = TRUE))
+#   }, .SDcols = samples, by = seq_len(nrow(dt))]
+#   
+#   dt[, Inconsistent_Zq := n_extreme_Zq <= n_extreme_lim & n_extreme_Zq > 0 &
+#        abs(median_Zq) < median_lim & MAD_Zq < mad_lim]
+#   dt
+# }
 
 
 #' Flag Changes in Z
