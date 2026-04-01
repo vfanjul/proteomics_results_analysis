@@ -364,19 +364,18 @@ get_gsea_sig <- function(gse,
 get_gsea_long <- function(gse, dt, param_cols, 
                           name_col = "Protein", 
                           id_col = "Accession") {
-  gse <- as.data.table(gse@result)
   # rels <- unique(gse[, .(unlist(strsplit(core_enrichment, "/"))), ID])
-  rels <- unique(rbindlist(lapply(names(gsea_kegg@geneSets),
-                         function(x) data.table(ID = x, gsea_kegg@geneSets[[x]]))))
+  rels <- unique(rbindlist(lapply(names(gse@geneSets),
+                                  function(x) data.table(ID = x, gse@geneSets[[x]]))))
   names(rels)[2] <- id_col
+  gse <- as.data.table(gse@result)
   
-  # gse <- merge(gse, rels, by = "ID", allow.cartesian = TRUE, sort = FALSE)
   gse <- gse[rels, on = "ID", nomatch = NULL, allow.cartesian = TRUE]
   
   dt <- melt(dt[, .SD, .SDcols = c(name_col, id_col, param_cols)],
              c(id_col, name_col)
   )[, group := gsub(".* (z|statistic) ", "", variable)]
-
+  
   dt <- merge(gse, dt, all.x = TRUE, sort = FALSE
   )[order(-NES)
   ][, group := factor(group, levels = gsub(".* (z|statistic) ", "", param_cols))
@@ -435,7 +434,7 @@ get_kegg_db <- function(species = "Homo sapiens",
   brite[, L2 := L2[1], by = cumsum(!is.na(L2))]
   
   p2c <- brite[startsWith(raw, "C")][, .(L1, L2, 
-                                         pathway = paste0(sel_org$kegg, sub(".*([0-9]{5}).*", "\\1", raw)),
+                                         pathway = paste0(org_db$kegg, sub(".*([0-9]{5}).*", "\\1", raw)),
                                          name = trimws(sub("C\\s*[0-9]{5}\\s*", "", raw)))]
   p2c <- p2c[pathway != ""]
   
