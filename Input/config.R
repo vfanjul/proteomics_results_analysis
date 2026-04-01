@@ -57,8 +57,10 @@ prot_col <- "Protein"
 np_col <- "Np"
 
 
-#### File paths ####
+#### File settings ####
 designroute <- "Input/design.csv"
 protroute <- "Input/protein_results.csv"
 catroute <- "Input/category_results.csv"
 outputroute <- "Output/"
+export_csv <- FALSE # Export results as uncompressed CSV files
+
