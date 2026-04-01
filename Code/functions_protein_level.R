@@ -409,11 +409,11 @@ get_gsea_long <- function(gse, dt, param_cols,
 #' 
 #' @author Victor Fanjul (2026-02-12)
 get_kegg_db <- function(species = "Homo sapiens", 
-                        l1_blacklist = "organismal|disease|drug",
-                        l2_blacklist = "virus|prokaryote|maps|terpenoid|secondary metabolite|xenobiotic",
-                        l3_blacklist = "plant|-.*bacter|photosynthesis|carbon fixation|cutin|sulfoquinovose|lipopolysaccharide|o-antigen|peptidoglycan|teichoic|phosphotransferase|lipoarabin|exopolysac|ubiquinone|two-component|- other$|bacterial secretion|chemotaxis|flagellar|methane|mycolic",
+                        l1_blacklist = "drug",
+                        l2_blacklist = "virus|prokaryote|maps",
+                        l3_blacklist = "plant|-.*bacter|- other$|worm|fly|yeast",
                         l2_whitelist = "null",
-                        l3_whitelist = "terpenoid backbone|p450|drug metabolism",
+                        l3_whitelist = "null",
                         gene_blacklist = NULL) {
   
   # Select species DB names
