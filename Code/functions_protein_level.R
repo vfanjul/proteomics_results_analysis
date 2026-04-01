@@ -838,33 +838,48 @@ plot_gsea_cnet <- function(gse,
     theme(legend.position = "none") 
   
   cnet$data$name[!is.na(as.vector(cnet$data$color))] <- NA
-  cnet[["layers"]][[2]][["mapping"]][["colour_new"]][[2]][[2]] <- category_color
+  nes_map <- setNames(gse@result$NES, gse@result$Description)
+  cnet$data$NES <- nes_map[as.character(cnet$data$name)]
+  
+  cat_sizes <- cnet$data$size[is.na(cnet$data$color)]
+  if (length(cat_sizes) > 0 && max(cat_sizes, na.rm = TRUE) != min(cat_sizes, na.rm = TRUE)) {
+    cat_sizes <- 2 + 4 * (cat_sizes - min(cat_sizes, na.rm = TRUE)) / (max(cat_sizes, na.rm = TRUE) - min(cat_sizes, na.rm = TRUE))
+  } else cat_sizes <- 4
+  
+  cnet <- cnet + 
+    geom_point(data = cnet$data[is.na(cnet$data$color), ], 
+               aes(x = x, y = y, color = NES), 
+               size = cat_sizes, 
+               shape = 21, fill = "white", stroke = 1.2)
   
   set.seed(seed)
-  cnet <- cnet + geom_text_repel(aes_(x = ~x, y = ~y, label = ~name), bg.color = "white", 
+  cnet <- cnet + geom_text_repel(aes_(x = ~x, y = ~y, label = ~substring(name, 1, 80)), bg.color = "white", 
                                  max.overlaps = max.overlaps, cex = 3, bg.r = 0.1)
   print(cnet)
 }
 
 
 
-#' Make GSEA Ridge Plot
+#' Make GSEA Ridgeline Plot
 #' 
-#' @description Makes a GSEA ridge plot.
+#' @description Makes a GSEA ridgeline plot.
 #' 
 #' @param dt Proteomics dataset.
-#' @param xlab X axis label.
+#' @param xlab X axis label. Default is "Protein abundance change vs control (t statistic)".
 #' @param x_col X axis column name. Default is "value".
 #' @param y_col Y axis column name. Default is "Description".
 #' @param p_col P value column name. Default is "p.adjust".
 #' @param group_col Group column name. Default is "group".
+#' @param nes_col NES column name. Default is "NES".
+#' @param y_max Max ridges to plot.
 #' @param change_colors Vector with color scale for x. Default is c("dodgerblue", "white", "red").
 #' @param sat_lim Color saturation z threshold. Default is 3.
 #' @param xlim Vector of x axis limits. Default is c(-6, 6).
 #' 
 #' @return Ridges plot.
 #' 
-#' @details Fill color denotes change in x. Line color denotes whether the element
+#' @details If there are more categories than max ridges allowed, the top abs(NES)
+#' are plotted. Fill color denotes change in x. Line color denotes whether the element
 #' has significant (black) or non-significan changes (grey).
 #' 
 #' # Required libraries:
@@ -874,17 +889,27 @@ plot_gsea_cnet <- function(gse,
 #' * scales
 #' 
 #' @author Victor Fanjul (2022-03-21)
-plot_gsea_ridges <- function(dt, xlab,
+plot_gsea_ridges <- function(dt, 
+                             xlab = "Protein abundance change vs control (t statistic)",
                              x_col = "value", 
                              y_col = "Description", 
                              p_col = "p.adjust", 
                              group_col = "group",
                              nes_col = "NES", 
+                             y_max = NULL,
                              change_colors = c("dodgerblue", "white", "red"), 
                              sat_lim = 3, 
                              xlim = c(-4, 4)) {
-  lim <- max(abs(summary(dt[, get(x_col)])[c(1, 6)]))
   
+  if (!is.null(y_max)) if (dt[, uniqueN(get(y_col))] > y_max) {
+    min_nes <- dt[, max(abs(get(nes_col))), get(y_col)][order(-V1)][1:y_max][, min(V1)]
+    dt <- dt[abs(get(nes_col)) >= min_nes]
+  }
+  
+  lim <- max(abs(summary(dt[, get(x_col)])[c(1, 6)]))
+
+  dt[, (y_col) := factor(substring(get(y_col), 1, 80), 
+                         levels = unique(substring(get(y_col), 1, 80)))]
   nes_dt <- unique(dt[, .(NES = get(nes_col), 
                           y_val = get(y_col), 
                           group = get(group_col))])
@@ -902,7 +927,7 @@ plot_gsea_ridges <- function(dt, xlab,
           scale_fill_gradientn(colors = change_colors[c(1, 1, 2, 3, 3)], 
                                values = rescale(c(-lim, -sat_lim, 0, sat_lim, lim)),
                                limits = c(-lim, lim), guide = "none") +
-
+          
           coord_cartesian(xlim = xlim) +
           xlab(xlab) + ylab(NULL)
   )
