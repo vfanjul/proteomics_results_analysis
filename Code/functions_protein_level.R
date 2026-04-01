@@ -961,9 +961,7 @@ plot_pca <- function(dt, samples, colors, groups,
   
   par(xpd = TRUE, mar = c(3,3,1,1), mgp = c(1.5,0.25,0), tck = - 0.01)
   plot(protpca$x[, c(comp_x, comp_y)], col = colors, pch = 19)
-  legend(x = "top", legend = groups, col = unique(colors), pch = 19, cex = 0.5, 
-         bty = "n", ncol = length(groups), inset = c(0,-0.1))
-  
+
   par(xpd = FALSE, mar = c(5.1, 4.1, 4.1, 2.1), mgp = c(3, 1, 0), tck = NA)
 }
 
