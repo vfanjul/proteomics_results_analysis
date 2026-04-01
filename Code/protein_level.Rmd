@@ -1,4 +1,4 @@
----
+--
 author: "`r author`"
 date: "`r format(Sys.time(), '%Y-%m-%d')`"
 output:
@@ -175,7 +175,7 @@ plot_dendrogram(prot_data2, samples)
 for (i in 2:4) plot_pca(prot_data2, samples, exp_design$color, groups, 1, i)
 ```
 
-```{r variability-legend, dpi=dpi, out.width = "50%", fig.height=figh/8/figs, fig.width=figw/2/figs}
+```{r variability-legend, dpi=dpi, out.width = "50%", fig.height=figh/figh/figs, fig.width=figw/2/figs}
 
 plot_legend(groups, unique(exp_design[, color]))
 ```
@@ -266,7 +266,7 @@ heat_height <- (prot_data3[, .N] + 1)/10
 plot_prot_heatmap(prot_data3, sample_values, case_change, exp_design$color, "prot_lab", sat_lim)
 ```
 
-```{r heatmap-legend, dpi=dpi, out.width = "50%", fig.height=figh/8/figs, fig.width=figw/2/figs, fig.cap=c("")}
+```{r heatmap-legend, dpi=dpi, out.width = "50%", fig.height=figh/figh/figs, fig.width=figw/2/figs, fig.cap=c("")}
 
 plot_legend(groups, unique(exp_design[, color]))
 ```
@@ -297,8 +297,8 @@ if (rm_artifacts == TRUE) data_cols <- c(data_cols, "Artifact")
 if (rm_inconsistent == TRUE) data_cols <- c(data_cols, "Inconsistent")
 
 dir.create(outputroute, showWarnings = FALSE)
-fwrite(prot_data[, ..data_cols],
-       paste0(outputroute, project, " protein_results.csv"), sep = ";")
+if(export_csv) fwrite(prot_data[, ..data_cols],
+                      paste0(outputroute, project, " protein_results.csv"), sep = ";")
 
 write_excel(prot_data[, ..data_cols],
             paste0(outputroute, project, " protein_results.xlsx"), "protein_results",
@@ -406,15 +406,15 @@ for(i in case_params) {
 
 ```{r gsea-export, results="hide"}
 
-fwrite(gsea_go_long, 
-       paste0(outputroute, project, " gsea_go_results.csv"), sep = ";")
+if(export_csv) fwrite(gsea_go_long, 
+                      paste0(outputroute, project, " gsea_go_results.csv"), sep = ";")
 
 write_excel(gsea_go_long, 
             paste0(outputroute, project, " gsea_go_results.xlsx"), "gsea_go_results", 
             "NES", c("pvalue", "p.adjust"), "value", "setSize")
 
-fwrite(gsea_kegg_long, 
-       paste0(outputroute, project, " gsea_kegg_results.csv"), sep = ";")
+if(export_csv) fwrite(gsea_kegg_long, 
+                      paste0(outputroute, project, " gsea_kegg_results.csv"), sep = ";")
 
 write_excel(gsea_kegg_long, 
             paste0(outputroute, project, " gsea_kegg_results.xlsx"), "gsea_kegg_results", 
