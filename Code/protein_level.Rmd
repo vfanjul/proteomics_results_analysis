@@ -19,10 +19,9 @@ knitr::opts_knit$set(root.dir = "..")
 
 ```{r config, include=FALSE}
 
-source("Code/config.R")
+source("Input/config.R")
 source("Code/functions_general.R")
-sel_org <- all_org[all_org$species %in% species, ]
-get_libraries(libraries, sel_org$go)
+get_libraries(libraries, map_org(species)$go)
 source("Code/functions_protein_level.R")
 get_libraries(libraries, bioc_libraries)
 ```
