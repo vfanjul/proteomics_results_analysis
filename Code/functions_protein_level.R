@@ -214,8 +214,8 @@ flag_z_changes <- function(dt, case_param_cols, case_change_cols, zlim) {
 #' @param ont Ontology in GO. Default is "BP".
 #' @param name_col Protein name column name (Accession for GO and Entrez for KEGG). Default is "Accession".
 #' @param keyType Gene key type. Default is "UNIPROT".
+#' @param kegg_db KEGG database data.table object. Default is NULL.
 #' @param pAdjustMethod P value adjustment method. Default is "BH".
-#' @param use_internal_data use KEGG.db or latest online KEGG data. Default is FALSE.
 #' @param seed Seed for reproducibility. Default is 50.
 #' 
 #' @return GSEA object.
@@ -283,7 +283,7 @@ get_gsea <- function(dt, param_cols,
 #' @param param_col Protein abundance column name.
 #' @param name_col Protein name column name. Default is "Accession".
 #' @param filter_col Columm name of variable to filter. Default is "p.adjust".
-#' @param lim Abs limit to filter. Default is 0.05.
+#' @param sig_lim Abs limit to filter. Default is 0.05.
 #' 
 #' @return GSEA object.
 #' 
@@ -297,12 +297,13 @@ get_gsea <- function(dt, param_cols,
 get_gsea_group <- function(gse, dt, param_col, 
                            name_col = "Accession",
                            filter_col = "p.adjust", 
-                           lim = 0.05) {
+                           sig_lim = 0.05) {
   group <- gsub(".* z ", "", param_col)
-  gse@geneList <- get_prot_list(dt, param_col, name_col)
+  name_col <- 
+    gse@geneList <- get_prot_list(dt, param_col, name_col)
   if (filter_col == "NES") {
-    gse@result <- gse@result[gse@result$group == group & abs(gse@result[, filter_col]) > lim, ]
-  } else gse@result <- gse@result[gse@result$group == group & gse@result[, filter_col] < lim, ]
+    gse@result <- gse@result[gse@result$group == group & abs(gse@result[, filter_col]) > sig_lim, ]
+  } else gse@result <- gse@result[gse@result$group == group & gse@result[, filter_col] < sig_lim, ]
   rownames(gse@result) <- gse@result$ID
   gse
 }
@@ -315,7 +316,7 @@ get_gsea_group <- function(gse, dt, param_col,
 #' 
 #' @param gse GSEA object.
 #' @param filter_col Columm name of variable to filter. Default is "p.adjust".
-#' @param lim Abs limit to filter. Default is 0.05.
+#' @param sig_lim Abs limit to filter. Default is 0.05.
 #' 
 #' @return GSEA object.
 #' 
@@ -329,11 +330,11 @@ get_gsea_group <- function(gse, dt, param_col,
 #' @author Victor Fanjul (2022-03-21). V02 (2026-02-22)
 get_gsea_sig <- function(gse, 
                          filter_col = "p.adjust", 
-                         lim = 0.05) {
+                         sig_lim = 0.05) {
   if (filter_col == "NES") {
-    sig_cat <- unique(gse@result[abs(gse@result[, filter_col]) > lim, "Description"])
-  } else sig_cat <- unique(gse@result[gse@result[, filter_col] < lim, "Description"])
-
+    sig_cat <- unique(gse@result[abs(gse@result[, filter_col]) > sig_lim, "Description"])
+  } else sig_cat <- unique(gse@result[gse@result[, filter_col] < sig_lim, "Description"])
+  
   gse@result <- gse@result[gse@result$Description %in% sig_cat, ]
   gse
 }
@@ -405,7 +406,6 @@ get_gsea_long <- function(gse, dt, param_cols,
 #' @details 
 #' 
 #' # Required libraries:
-# * clusterProfiler (not if no id translation)
 #' * data.table
 #' 
 #' @author Victor Fanjul (2026-02-12)
@@ -817,9 +817,8 @@ rescale.AsIs <- function(x, to = c(0, 1), from = range(x, na.rm = TRUE, finite =
   scales::rescale(as.vector(x), to = to, from = from, ...)
 }
 plot_gsea_cnet <- function(gse,
-                           category_color = "grey30", 
                            change_colors = c("dodgerblue", "white", "red"),
-                           sat_lim = 3,
+                           sat_lim = 2,
                            layout = "nicely",
                            max.overlaps = 15,
                            seed = 50) {
