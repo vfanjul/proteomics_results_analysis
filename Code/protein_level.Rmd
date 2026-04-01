@@ -63,7 +63,9 @@ case_params <- setdiff(group_means, ctrl_mean)
 if (rel_to != "control_mean") case_params <- gsub("Mean", "∆ mean", case_params)
 
 case_p_values <- gsub(".* z ", "P value ", case_params)
+case_t_stats <- gsub(".* z ", "t statistic ", case_params)
 case_change <- gsub(".*z ", "Change ", case_params)
+
 case_dys <- gsub(".*z ", "dys ", case_params)
 case_up <- gsub(".*z ", "up ", case_params)
 case_down <- gsub(".*z ", "down ", case_params)
