@@ -30,11 +30,11 @@ bioc_libraries <- c("limma", "clusterProfiler", "enrichplot", "ggrepel")
 #' # Required libraries:
 #' * data.table
 #' 
-#' @author Victor Fanjul (2021-12-05)
-
+#' @author Victor Fanjul (2021-12-05). V02 (2022-10-15)
 add_group_means <- function(dt, samples_by_group, group_mean_cols, 
                             case_delta_cols, ctrl_mean_col,
                             rel_to = "control_mean") {
+  samples <- unlist(samples_by_group)
   
   dt <- as.data.table(dt)
   dt[, (group_mean_cols) := lapply(samples_by_group,
@@ -43,8 +43,8 @@ add_group_means <- function(dt, samples_by_group, group_mean_cols,
   if (rel_to != "control_mean") {
     dt[, (case_delta_cols) := lapply(setdiff(group_mean_cols, ctrl_mean_col), 
                                      function(x) get(x) - get(ctrl_mean_col))
-    # ][, `∆ mean z` := rowMeans(.SD), .SDcols = case_delta_cols]
-    ]
+    ][, (paste0("∆ ", samples)) := lapply(samples, 
+                                          function(x) get(x) - get(ctrl_mean_col))]
   }
   dt
 }
@@ -60,7 +60,6 @@ add_group_means <- function(dt, samples_by_group, group_mean_cols,
 #' @return Vector with number of rows and columns.
 #' 
 #' @author Victor Fanjul (2021-08-29)
-
 arrange_facets <- function(facets) {
   plot_rows <- ifelse(facets == 3, 1, round(sqrt(facets), 0))
   plot_cols <- ifelse(facets == 3, 3, ceiling(facets/plot_rows))
@@ -87,7 +86,6 @@ arrange_facets <- function(facets) {
 #' * limma (Bioconductor)
 #' 
 #' @author Victor Fanjul (2021-12-05)
-
 fit_limma <- function(dt, samples, sample_groups) {
   
   dt <- as.data.table(dt)[, .SD, .SDcols = samples]
@@ -101,7 +99,7 @@ fit_limma <- function(dt, samples, sample_groups) {
   rownames(model_matrix) <- samples
   colnames(model_matrix) <- groups
   
-  contrasts <- apply(combn(groups, 2), 2, paste, collapse = "-")
+  contrasts <- apply(combn(groups, 2), 2, function(x) paste(x[2], x[1], sep = "-"))
   cont_matrix <- makeContrasts(contrasts = contrasts, levels = model_matrix)
   
   fit <- lmFit(dt, model_matrix)
@@ -118,8 +116,8 @@ fit_limma <- function(dt, samples, sample_groups) {
 #' 
 #' @param dt Proteomics dataset.
 #' @param prot_col Protein column name.
-#' @param rm_artifacts Whether to remove artifacts (TRUE/FALSE).
-#' @param exclude_pattern Vector of artifact name patterns.
+#' @param rm_artifacts Whether to remove artifacts. Default is TRUE.
+#' @param exclude_pattern Vector of artifact name patterns. Default is "trypsin|keratin".
 #' @param artifact_col Name for artifact column. Default is "Artifact".
 #' 
 #' @return Data table with additional column.
@@ -130,13 +128,49 @@ fit_limma <- function(dt, samples, sample_groups) {
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-12-05)
-
-flag_artifacts <- function(dt, prot_col, rm_artifacts, exclude_pattern, 
+flag_artifacts <- function(dt, prot_col, 
+                           rm_artifacts = TRUE, 
+                           exclude_pattern = "trypsin|keratin", 
                            artifact_col = "Artifact") {
+  
   dt <- as.data.table(dt)[, (artifact_col) := FALSE]
   if (rm_artifacts) {
     dt[grep(paste0(exclude_pattern, collapse = "|"), 
             get(prot_col), ignore.case = TRUE), (artifact_col) := TRUE]
+  }
+}
+
+
+
+#' Flag Inconsistent in Proteomics Dataset
+#' 
+#' @description Adds a column that flags proteins with highly inconsistent
+#' expression across controls and another with the SD of controls.
+#' 
+#' @param dt Proteomics dataset.
+#' @param ctrl_samples Column names with control samples.
+#' @param rm_inconsistent Whether to remove artifacts. Default is TRUE.
+#' @param quant_lim Threshold quantile to consider inconsistency.
+#' @param sd_col Name for SD column. Default is "SD control".
+#' @param inconsistent_col Name for inconsistent column. Default is "Inconsistent".
+#' 
+#' @return Data table with additional columns.
+#' 
+#' @details 
+#' 
+#' # Required libraries:
+#' * data.table
+#' 
+#' @author Victor Fanjul (2025-02-09)
+flag_inconsistent <- function (dt, ctrl_samples, 
+                               rm_inconsistent = TRUE, 
+                               quant_lim = 0.99,
+                               sd_col = "SD control",
+                               inconsistent_col = "Inconsistent") {
+  dt <- as.data.table(dt)[, (inconsistent_col) := FALSE]
+  if (rm_inconsistent) {
+    dt[, (sd_col) := sqrt(rowMeans((.SD - rowMeans(.SD, na.rm = TRUE))^2, na.rm = TRUE)), .SDcols = ctrl_samples]
+    dt[, (inconsistent_col) := get(sd_col) > quantile(get(sd_col), quant_lim, na.rm = TRUE)]
   }
 }
 
@@ -159,8 +193,7 @@ flag_artifacts <- function(dt, prot_col, rm_artifacts, exclude_pattern,
 #' # Required libraries:
 #' * data.table
 #' 
-#' @author Victor Fanjul (date)
-# 2021-12-05
+#' @author Victor Fanjul (2021-12-05)
 flag_z_changes <- function(dt, case_param_cols, case_change_cols, zlim) {
   
   dt <- as.data.table(dt)
@@ -177,12 +210,12 @@ flag_z_changes <- function(dt, case_param_cols, case_change_cols, zlim) {
 #' @param dt Proteomics dataset.
 #' @param param_cols Protein abundance column names.
 #' @param source_db GSEA based on GO or KEGG. Default is "GO".
-#' @param species Species in a format compatible with source db. Default is "org.Hs.eg.db".
+#' @param species Scientific name of the organism. Default is "Homo sapiens".
 #' @param ont Ontology in GO. Default is "BP".
-#' @param name_col Protein name column name. Default is "Accession".
+#' @param name_col Protein name column name (Accession for GO and Entrez for KEGG). Default is "Accession".
 #' @param keyType Gene key type. Default is "UNIPROT".
+#' @param kegg_db KEGG database data.table object. Default is NULL.
 #' @param pAdjustMethod P value adjustment method. Default is "BH".
-#' @param use_internal_data use KEGG.db or latest online KEGG data. Default is FALSE.
 #' @param seed Seed for reproducibility. Default is 50.
 #' 
 #' @return GSEA object.
@@ -193,20 +226,20 @@ flag_z_changes <- function(dt, case_param_cols, case_change_cols, zlim) {
 #' * data.table
 #' * clusterProfiler
 #' 
-#' @author Victor Fanjul (2022-03-21)
-
-get_gsea <- function(dt, param_cols, 
+#' @author Victor Fanjul (2022-03-21) V2 (2026-02-12)
+get_gsea <- function(dt, param_cols,
                      source_db = "GO",
-                     species = "org.Hs.eg.db", 
+                     species = "Homo sapiens", 
                      ont = "BP", 
                      name_col =  "Accession",
                      keyType = "UNIPROT", 
+                     kegg_db = NULL,
                      pAdjustMethod = "BH",
-                     use_internal_data = FALSE,
                      seed = 50) {
   
+  org_db <- map_org(species)
   
-  groups <- gsub(".* z ", "", param_cols)
+  groups <- gsub(".* (z|statistic) ", "", param_cols)
   result <- c()
   for (i in 1:length(param_cols)) {
     prot_list <-  get_prot_list(dt, param_cols[i], name_col)
@@ -214,21 +247,20 @@ get_gsea <- function(dt, param_cols,
     if (source_db == "GO") {
       gse <- gseGO(prot_list, 
                    ont = ont,
-                   OrgDb = get(species),
+                   OrgDb = get(org_db$go),
                    keyType = keyType,
                    pvalueCutoff = 1,
                    pAdjustMethod = pAdjustMethod,
                    verbose = FALSE,
                    seed = TRUE)
-    } else {
-      gse <- gseKEGG(prot_list,
-                     organism = species,
-                     keyType = tolower(keyType),
-                     pvalueCutoff = 1,
-                     pAdjustMethod = pAdjustMethod,
-                     verbose = FALSE,
-                     seed = TRUE,
-                     use_internal_data = use_internal_data)
+    } else if (source_db == "KEGG" & !is.null(kegg_db)) {
+      gse <- GSEA(prot_list,
+                  TERM2GENE = kegg_db$path2gene,
+                  TERM2NAME = kegg_db$path2name,
+                  pvalueCutoff = 1,
+                  pAdjustMethod = pAdjustMethod,
+                  seed = TRUE,
+                  verbose = FALSE)
     }
     gse@result$group <- groups[i]
     result <- rbind(result, gse@result)
@@ -250,8 +282,8 @@ get_gsea <- function(dt, param_cols,
 #' @param dt Proteomics dataset.
 #' @param param_col Protein abundance column name.
 #' @param name_col Protein name column name. Default is "Accession".
-#' @param p_col P value column name. Default is "p.adjust".
-#' @param p_lim P value threshold. Default is 0.05.
+#' @param filter_col Columm name of variable to filter. Default is "p.adjust".
+#' @param sig_lim Abs limit to filter. Default is 0.05.
 #' 
 #' @return GSEA object.
 #' 
@@ -261,15 +293,17 @@ get_gsea <- function(dt, param_cols,
 #' * data.table
 #' * clusterProfiler
 #' 
-#' @author Victor Fanjul (2022-03-27)
-
+#' @author Victor Fanjul (2022-03-27). V02 (2026-02-22)
 get_gsea_group <- function(gse, dt, param_col, 
                            name_col = "Accession",
-                           p_col = "p.adjust", 
-                           p_lim = 0.05) {
+                           filter_col = "p.adjust", 
+                           sig_lim = 0.05) {
   group <- gsub(".* z ", "", param_col)
-  gse@geneList <- get_prot_list(dt, param_col, name_col)
-  gse@result <- gse@result[gse@result$group == group & gse@result[, p_col] < p_lim, ]
+  name_col <- 
+    gse@geneList <- get_prot_list(dt, param_col, name_col)
+  if (filter_col == "NES") {
+    gse@result <- gse@result[gse@result$group == group & abs(gse@result[, filter_col]) > sig_lim, ]
+  } else gse@result <- gse@result[gse@result$group == group & gse@result[, filter_col] < sig_lim, ]
   rownames(gse@result) <- gse@result$ID
   gse
 }
@@ -281,21 +315,26 @@ get_gsea_group <- function(gse, dt, param_col,
 #' @description Filters a GSEA to obtain significant categories.
 #' 
 #' @param gse GSEA object.
-#' @param p_col P value column name. Default is "p.adjust".
-#' @param p_lim P value threshold. Default is 0.05.
+#' @param filter_col Columm name of variable to filter. Default is "p.adjust".
+#' @param sig_lim Abs limit to filter. Default is 0.05.
 #' 
 #' @return GSEA object.
 #' 
-#' @details Filters a GSEA by p value.
+#' @details Filters a GSEA by p value. If there are multiple comparison groups
+#' Categories will be retained for all groups when at least one fits the selection criteria.
 #' 
 #' # Required libraries:
 #' * data.table
 #' * clusterProfiler
 #' 
-#' @author Victor Fanjul (2022-03-21)
-
-get_gsea_sig <- function(gse, p_col = "p.adjust", p_lim = 0.05) {
-  sig_cat <- unique(gse@result[gse@result[, p_col] < p_lim, "Description"])
+#' @author Victor Fanjul (2022-03-21). V02 (2026-02-22)
+get_gsea_sig <- function(gse, 
+                         filter_col = "p.adjust", 
+                         sig_lim = 0.05) {
+  if (filter_col == "NES") {
+    sig_cat <- unique(gse@result[abs(gse@result[, filter_col]) > sig_lim, "Description"])
+  } else sig_cat <- unique(gse@result[gse@result[, filter_col] < sig_lim, "Description"])
+  
   gse@result <- gse@result[gse@result$Description %in% sig_cat, ]
   gse
 }
@@ -309,7 +348,8 @@ get_gsea_sig <- function(gse, p_col = "p.adjust", p_lim = 0.05) {
 #' @param gse GSEA object.
 #' @param dt Proteomics dataset.
 #' @param param_cols Protein abundance column names.
-#' @param name_col Protein name column name. Default is "Accession".
+#' @param name_col Protein name column name. Default is "Protein".
+#' @param id_col Protein name column name. Default is "Accession".
 #' 
 #' @return GSEA results data table
 #' 
@@ -320,47 +360,131 @@ get_gsea_sig <- function(gse, p_col = "p.adjust", p_lim = 0.05) {
 #' * data.table
 #' * clusterProfiler
 #' 
-#' @author Victor Fanjul (2022-03-21)
-
-get_gsea_long <- function(gse, dt, param_cols, name_col = "Accession") {
+#' @author Victor Fanjul (2022-03-21). V02 (2022-10-15). V03 (2026-02-22)
+get_gsea_long <- function(gse, dt, param_cols, 
+                          name_col = "Protein", 
+                          id_col = "Accession") {
+  # rels <- unique(gse[, .(unlist(strsplit(core_enrichment, "/"))), ID])
+  rels <- unique(rbindlist(lapply(names(gse@geneSets),
+                                  function(x) data.table(ID = x, gse@geneSets[[x]]))))
+  names(rels)[2] <- id_col
   gse <- as.data.table(gse@result)
-  rels <- unique(gse[, .(Accession = unlist(strsplit(core_enrichment, "/"))), Description])
-  gse <- gse[rels, on = "Description", allow.cartesian = TRUE]
   
-  dt <- melt(dt[, .SD, .SDcols = c(name_col, param_cols)], name_col
-  )[, group := gsub(".* z ", "", variable)]
+  gse <- gse[rels, on = "ID", nomatch = NULL, allow.cartesian = TRUE]
+  
+  dt <- melt(dt[, .SD, .SDcols = c(name_col, id_col, param_cols)],
+             c(id_col, name_col)
+  )[, group := gsub(".* (z|statistic) ", "", variable)]
   
   dt <- merge(gse, dt, all.x = TRUE, sort = FALSE
-  )[order(-NES)
-  ][, group := factor(group, levels = gsub(".* z ", "", param_cols))
+  )[, group_nes := NES, Description
+  ][, group := factor(group, levels = gsub(".* (z|statistic) ", "", param_cols))
+  ][order(-group_nes, Description, group)
+  ][, group_nes := NULL
   ][, Description := factor(Description, levels = unique(Description))
-  ][, core_enrichment := paste(Accession, collapse = "/"), Description
+  ][, core_enrichment := paste(get(id_col), collapse = "/"), Description
   ]
   dt
 }
 
 
 
-#' Get Protein cols
+#' Get KEGG Database
 #' 
-#' @description Extracts information from the protein name col in a proteomics 
-#' dataset and includes it as new columns.
+#' @description Gets KEGG path names and gene relations.
 #' 
-#' @param dt Proteomics dataset.
-#' @param prot_col Protein column name.
+#' @param species Scientific name of the organism. Default is "Homo sapiens".
+#' @param keyType Gene key type. Default is "UNIPROT". (not if no id translation)
+#' @param l1_blacklist Blacklist pattern for level 1 KEGG categories. Default is "organismal|disease|drug".
+#' @param l2_blacklist Blacklist pattern for level 2 KEGG categories. Default is "virus|prokaryote".
+#' @param l3_blacklist Blacklist pattern for pathways (level 3). Default is "null".
+#' @param l2_whitelist Pattern to exclude from blacklist at level 2. Default is "null".
+#' @param l3_whitelist Pattern to exclude from blacklist at level 2. Default is "null".
 #' 
-#' @return Data table with additional columns.
+#' @return List with path to gene, path to name and path to category KEGG data tables. 
+#' Filters categories and pathways to exclude those blacklisted and not those whitelisted.
 #' 
-#' @details Extracts information for Accession, Entry_name and Protein_name.
+#' @details 
 #' 
 #' # Required libraries:
 #' * data.table
 #' 
-#' @author Victor Fanjul (2021-10-19)
-
-get_prot_cols <- function(dt, prot_col) {
+#' @author Victor Fanjul (2026-02-12)
+get_kegg_db <- function(species = "Homo sapiens", 
+                        l1_blacklist = "drug",
+                        l2_blacklist = "virus|prokaryote|maps",
+                        l3_blacklist = "plant|-.*bacter|- other$|worm|fly|yeast",
+                        l2_whitelist = "null",
+                        l3_whitelist = "null",
+                        gene_blacklist = NULL) {
   
+  # Select species DB names
+  org_db <- map_org(species)
+  
+  # Get pathway - gene relations
+  p2g <- fread(paste0("https://rest.kegg.jp/link/", org_db$kegg, "/pathway"), 
+               header = FALSE, col.names = c("pathway", "gene")
+  )[, pathway := gsub("path:", "", pathway)][, gene := gsub(".*:", "", gene)]
+  if (!is.null(gene_blacklist)) p2g <- p2g[!gene %in% gene_blacklist]
+  
+  # Get pathway name and hierarchy
+  brite <- fread("https://rest.kegg.jp/get/br:br08901", sep = "\n", header = FALSE, col.names = "raw")
+  brite[, raw := gsub("<[^>]+>", "", raw)]
+  brite[, L1 := fifelse(startsWith(raw, "A"), trimws(substring(raw, 2)), NA_character_)]
+  brite[, L2 := fifelse(startsWith(raw, "B"), trimws(substring(raw, 2)), NA_character_)]
+  brite[, L1 := L1[1], by = cumsum(!is.na(L1))]
+  brite[, L2 := L2[1], by = cumsum(!is.na(L2))]
+  
+  p2c <- brite[startsWith(raw, "C")][, .(L1, L2, 
+                                         pathway = paste0(org_db$kegg, sub(".*([0-9]{5}).*", "\\1", raw)),
+                                         name = trimws(sub("C\\s*[0-9]{5}\\s*", "", raw)))]
+  p2c <- p2c[pathway != ""]
+  
+  # Exclude blacklisted pathways
+  p2c[grepl(l3_blacklist, name, ignore.case = TRUE)
+      & !grepl(l3_whitelist, name, ignore.case = TRUE), exclude := 1]
+  
+  p2c[(grepl(l1_blacklist, L1, ignore.case = TRUE) 
+       | grepl(l2_blacklist, L2, ignore.case = TRUE)) 
+      & !grepl(l2_whitelist, L2, ignore.case = TRUE) 
+      & !grepl(l3_whitelist, name, ignore.case = TRUE), exclude := 1]
+  
+  # p2c <- p2c[is.na(exclude)][, exclude := NULL]
+  p2n <- p2c[is.na(exclude), .(pathway, name)]
+  p2g <- p2g[pathway %in% p2n$pathway]
+  
+  # Output DB
+  list(path2gene = p2g, path2name = p2n, path2category = p2c)
+}
+
+
+
+#' Get Protein cols
+#' 
+#' @description Extracts information from the protein name col (Uniprot FASTA) 
+#' in a proteomics dataset and includes it as new columns.
+#' 
+#' @param dt Proteomics dataset.
+#' @param prot_col Protein column name.
+#' @param species Scientific name of the organism. Default is "Homo sapiens".
+#' 
+#' @return Data table with additional columns.
+#' 
+#' @details Extracts information for (Uniprot) Accession, Entry_name, Protein_name, 
+#' Gene, and Entrez (id). Entrez conversion is done in tiers using the other 
+#' columns as starting point.
+#' 
+#' # Required libraries:
+#' * data.table
+#' 
+#' @author Victor Fanjul (2021-10-19). V2 (2026-02-16).
+get_prot_cols <- function(dt, prot_col, 
+                          species = "Homo sapiens") {
+  
+  # Ensure data.table format
   dt <- as.data.table(dt)
+  
+  # Generate columns and extract information
   dt <- dt[, aux := gsub(" PE=.*", "", gsub("^.*?\\|", "", get(prot_col)))
   ][, Accession := gsub("\\|.*", "", aux)
   ][, aux := gsub("^[[:alnum:]]*\\|", "", aux)
@@ -368,8 +492,48 @@ get_prot_cols <- function(dt, prot_col) {
   ][, aux := gsub("^.*? ", "", aux)
   ][grep(" GN=", aux), Gene := gsub(".* GN=", "", aux)
   ][, Protein_name := gsub(" OS=.*", "", aux)
+  ][, Entrez := NA_character_
   ][, aux := NULL
   ]
+  
+  # Set up for Entrez id conversion
+  org_db <- map_org(species)$go
+  
+  tiers <- data.table(col = c("Gene", "Accession"),
+                      type = c("SYMBOL", "UNIPROT"))
+  
+  
+  for (i in 1:nrow(tiers)) {
+    # Check for remaining NAs and ensure the source column isn't NA
+    missing_mask <- is.na(dt$Entrez) & !is.na(dt[[tiers$col[i]]])
+    
+    if (any(missing_mask)) {
+      
+      # Map to Entrez id
+      query_vals <- unique(dt[[tiers$col[i]]][missing_mask])
+      
+      map_res <- suppressWarnings(suppressMessages(as.data.table(
+        bitr(query_vals, 
+             fromType = tiers$type[i], 
+             toType = "ENTREZID", 
+             OrgDb = org_db))))
+      
+      if (nrow(map_res) > 0) {
+        # Ensure 1:1 mapping by taking the first match
+        map_res <- unique(map_res, by = tiers$type[i])
+        
+        # Update Entrez column in-place
+        dt[missing_mask, Entrez := map_res[dt[missing_mask], 
+                                           on = setNames(tiers$col[i], tiers$type[i]), 
+                                           x.ENTREZID]]
+      }
+    }
+  }
+  
+  # Clean up and return data
+  dt[, Entrez := as.character(Entrez)]
+  
+  message(paste0("Entrez mapping success: ", round(mean(!is.na(dt$Entrez)) * 100, 2), "%"))
   dt
 }
 
@@ -386,17 +550,24 @@ get_prot_cols <- function(dt, prot_col) {
 #' 
 #' @return Vector with named protein relative abundances.
 #' 
-#' @details Generates a vector that lists proteins ordered by decreasing
-#' relative abundance.
+#' @details Generates a vector that lists proteins ordered by decreasing relative 
+#' abundance. If there are duplicate ids, the one with max abs value prevails.
 #' 
 #' # Required libraries:
 #' * data.table
 #' 
-#' @author Victor Fanjul (2022-03-21)
-
+#' @author Victor Fanjul (2022-03-21). V2 (2026-02-16).
 get_prot_list <- function(dt, param_col, name_col = "Accession") {
-  prot_list <- dt[, get(param_col)]
-  names(prot_list) <- dt[, get(name_col)]
+  
+  # Remove missing values and ids, 
+  clean_dt <- as.data.table(dt)[!is.na(get(name_col)) & !is.na(get(param_col))]
+  
+  # If duplicate ids, keep that with the max abs value
+  clean_dt <- clean_dt[, .SD[which.max(abs(get(param_col)))], by = name_col]
+  
+  # Extract value, name and sort by decreasing value
+  prot_list <- clean_dt[[param_col]]
+  names(prot_list) <- clean_dt[[name_col]]
   sort(prot_list, decreasing = TRUE)
 }
 
@@ -425,7 +596,6 @@ get_prot_list <- function(dt, param_col, name_col = "Accession") {
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-08-28 29)
-
 optimize_zlim <- function(dt, z_cols, p_cols, 
                           zlim = 1.5, 
                           alpha = 0.05,
@@ -481,7 +651,6 @@ optimize_zlim <- function(dt, z_cols, p_cols,
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-10-18)
-
 plot_bars <- function(dt, groups, values, colors, zlim, prot_col,
                       xlab = "Differentially expressed proteins") {
   
@@ -524,7 +693,6 @@ plot_bars <- function(dt, groups, values, colors, zlim, prot_col,
 #' * GGally
 #' 
 #' @author Victor Fanjul (2021-10-18)
-
 plot_corrpairs <- function(dt, samples, 
                            color = "red") {
   dt <- as.data.table(dt)
@@ -534,14 +702,14 @@ plot_corrpairs <- function(dt, samples,
 
 
 
-
 #' Plot Dendrogram
 #' 
 #' @description Makes a dendrogram for comparing samples.
 #' 
 #' @param dt Proteomics dataset.
 #' @param samples Vector of sample z column names.
-#' @param method Agglomeration clustering method. Default is "average".
+#' @param method Agglomeration clustering method. Default is "complete".
+#' @param scale Whether to scale samples. Default is TRUE
 #' 
 #' @return Dendrogram plot.
 #' 
@@ -550,12 +718,17 @@ plot_corrpairs <- function(dt, samples,
 #' # Required libraries:
 #' * data.table
 #' 
-#' @author Victor Fanjul (2021-10-17)
-
+#' @author Victor Fanjul (2021-10-17) V2 (2025-02-08)
 plot_dendrogram <- function(dt, samples, 
-                            method = "average") {
+                            method = "complete",
+                            scale = TRUE) {
   
   dt <- as.data.table(dt)
+  
+  if (scale) dt[, (samples) := as.data.table(
+    t(scale(t(.SD), center = TRUE, scale = TRUE))
+  ), .SDcols = samples]
+  
   par(mgp = c(1.5, 0.25, 0), tck = - 0.01)
   plot(hclust(dist(t(dt[, .SD, .SDcols = samples])), method = method), 
        labels = samples, main = "", xlab = "", sub = "", hang = -1)
@@ -582,7 +755,6 @@ plot_dendrogram <- function(dt, samples,
 #' * eulerr
 #' 
 #' @author Victor Fanjul (2021-10-18)
-
 plot_euler <- function(dt, vars, labels, colors) {
   
   dt <- as.data.table(dt)
@@ -609,7 +781,6 @@ plot_euler <- function(dt, vars, labels, colors) {
 #' @return Multi-faceted plot.
 #' 
 #' @author Victor Fanjul (2021-08-29)
-
 plot_facets <- function(dt, x, y, FUN = NULL, ...) {
   facets <- length(x)
   par(mfrow = arrange_facets(facets))
@@ -643,16 +814,18 @@ plot_facets <- function(dt, x, y, FUN = NULL, ...) {
 #' * scales
 #' 
 #' @author Victor Fanjul (2022-03-27)
-
+rescale.AsIs <- function(x, to = c(0, 1), from = range(x, na.rm = TRUE, finite = TRUE), ...) {
+  scales::rescale(as.vector(x), to = to, from = from, ...)
+}
 plot_gsea_cnet <- function(gse,
-                           category_color = "grey30", 
                            change_colors = c("dodgerblue", "white", "red"),
-                           sat_lim = 3,
+                           sat_lim = 2,
                            layout = "nicely",
                            max.overlaps = 15,
                            seed = 50) {
   
-  lim <- max(abs(gse@geneList))
+  lim <- as.numeric(max(abs(gse@geneList)))
+  scaled_values <- (c(-lim, -sat_lim, 0, sat_lim, lim) - (-lim)) / (2 * lim)
   
   set.seed(seed)
   cnet <- cnetplot(gse, 
@@ -662,38 +835,53 @@ plot_gsea_cnet <- function(gse,
                    layout = layout, # nicely sphere kk linear circle
                    cex_category = 0.5) +
     scale_color_gradientn(colors = change_colors[c(1, 1, 2, 3, 3)], 
-                          values = rescale(c(-lim, -sat_lim, 0, sat_lim, lim)),
+                          values = scaled_values,
                           limits = c(-lim, lim), guide = "none") + 
     theme(legend.position = "none") 
   
-  cnet$data$name[!is.na(cnet$data$color)] <- NA
-  cnet[["layers"]][[2]][["mapping"]][["colour_new"]][[2]][[2]] <- category_color
+  cnet$data$name[!is.na(as.vector(cnet$data$color))] <- NA
+  nes_map <- setNames(gse@result$NES, gse@result$Description)
+  cnet$data$NES <- nes_map[as.character(cnet$data$name)]
+  
+  cat_sizes <- cnet$data$size[is.na(cnet$data$color)]
+  if (length(cat_sizes) > 0 && max(cat_sizes, na.rm = TRUE) != min(cat_sizes, na.rm = TRUE)) {
+    cat_sizes <- 2 + 4 * (cat_sizes - min(cat_sizes, na.rm = TRUE)) / (max(cat_sizes, na.rm = TRUE) - min(cat_sizes, na.rm = TRUE))
+  } else cat_sizes <- 4
+  
+  cnet <- cnet + 
+    geom_point(data = cnet$data[is.na(cnet$data$color), ], 
+               aes(x = x, y = y, color = NES), 
+               size = cat_sizes, 
+               shape = 21, fill = "white", stroke = 1.2)
   
   set.seed(seed)
-  cnet <- cnet + geom_text_repel(aes_(x = ~x, y = ~y, label = ~name), bg.color = "white", 
+  cnet <- cnet + geom_text_repel(aes_(x = ~x, y = ~y, label = ~substring(name, 1, 80)), bg.color = "white", 
                                  max.overlaps = max.overlaps, cex = 3, bg.r = 0.1)
   print(cnet)
 }
 
 
 
-#' Make GSEA Ridge Plot
+#' Make GSEA Ridgeline Plot
 #' 
-#' @description Makes a GSEA ridge plot.
+#' @description Makes a GSEA ridgeline plot.
 #' 
 #' @param dt Proteomics dataset.
-#' @param xlab X axis label.
+#' @param xlab X axis label. Default is "Protein abundance change vs control (t statistic)".
 #' @param x_col X axis column name. Default is "value".
 #' @param y_col Y axis column name. Default is "Description".
 #' @param p_col P value column name. Default is "p.adjust".
 #' @param group_col Group column name. Default is "group".
+#' @param nes_col NES column name. Default is "NES".
+#' @param y_max Max ridges to plot.
 #' @param change_colors Vector with color scale for x. Default is c("dodgerblue", "white", "red").
 #' @param sat_lim Color saturation z threshold. Default is 3.
 #' @param xlim Vector of x axis limits. Default is c(-6, 6).
 #' 
 #' @return Ridges plot.
 #' 
-#' @details Fill color denotes change in x. Line color denotes whether the element
+#' @details If there are more categories than max ridges allowed, the top abs(NES)
+#' are plotted. Fill color denotes change in x. Line color denotes whether the element
 #' has significant (black) or non-significan changes (grey).
 #' 
 #' # Required libraries:
@@ -703,24 +891,45 @@ plot_gsea_cnet <- function(gse,
 #' * scales
 #' 
 #' @author Victor Fanjul (2022-03-21)
-
-plot_gsea_ridges <- function(dt, xlab,
+plot_gsea_ridges <- function(dt, 
+                             xlab = "Protein abundance change vs control (t statistic)",
                              x_col = "value", 
                              y_col = "Description", 
                              p_col = "p.adjust", 
                              group_col = "group",
+                             nes_col = "NES", 
+                             y_max = NULL,
                              change_colors = c("dodgerblue", "white", "red"), 
                              sat_lim = 3, 
-                             xlim = c(-6, 6)) {
+                             xlim = c(-4, 4)) {
+  
+  if (!is.null(y_max)) if (dt[, uniqueN(get(y_col))] > y_max) {
+    sel_cat <- dt[, max(abs(get(nes_col))), get(y_col)][order(-V1)][1:y_max, get]
+    dt <- dt[get(y_col) %in% sel_cat]
+  }
+  
   lim <- max(abs(summary(dt[, get(x_col)])[c(1, 6)]))
+
+  dt[, (y_col) := factor(substring(get(y_col), 1, 80), 
+                         levels = unique(substring(get(y_col), 1, 80)))]
+  nes_dt <- unique(dt[, .(NES = get(nes_col), 
+                          y_val = get(y_col), 
+                          group = get(group_col))])
   
   print(ggplot(dt, aes(x = get(x_col), y = get(y_col), fill = stat(x), color = get(p_col) < 0.05)) + 
-          geom_density_ridges_gradient(rel_min_height = 0.01) +
+          geom_density_ridges_gradient(rel_min_height = 0.01, scale = 1.2) +
+          geom_segment(data = nes_dt, 
+                       aes(x = NES, xend = NES, 
+                           y = as.numeric(factor(y_val)), 
+                           yend = as.numeric(factor(y_val)) + 0.9), 
+                       inherit.aes = FALSE, size = 1.2) +
+          geom_vline(xintercept = 0, linetype = "dashed", color = "grey30", alpha = 0.5) +
           facet_grid(cols = vars(get(group_col))) +
           scale_color_manual(values = c("grey70", "black"), guide = "none") +
           scale_fill_gradientn(colors = change_colors[c(1, 1, 2, 3, 3)], 
                                values = rescale(c(-lim, -sat_lim, 0, sat_lim, lim)),
                                limits = c(-lim, lim), guide = "none") +
+          
           coord_cartesian(xlim = xlim) +
           xlab(xlab) + ylab(NULL)
   )
@@ -738,7 +947,6 @@ plot_gsea_ridges <- function(dt, xlab,
 #' @return Legend plot
 #' 
 #' @author Victor Fanjul (2021-11-20)
-
 plot_legend <- function(groups, colors) {
   
   par(xpd = TRUE, mar = c(0.1, 0.1, 0.1, 0.1))
@@ -760,6 +968,7 @@ plot_legend <- function(groups, colors) {
 #' @param groups Vector of groups.
 #' @param comp_x Component displayed in x axis. Default is 1.
 #' @param comp_y Component displayed in y axis. Default is 2.
+#' @param scale Whether to scale samples. Default is FALSE.
 #' 
 #' @return PCA plot
 #' 
@@ -768,20 +977,18 @@ plot_legend <- function(groups, colors) {
 #' # Required libraries:
 #' * data.table
 #' 
-#' @author Victor Fanjul (2021-10-17)
-
+#' @author Victor Fanjul (2021-10-17) V2 (2025-02-08)
 plot_pca <- function(dt, samples, colors, groups, 
                      comp_x = 1, 
-                     comp_y = 2) {
+                     comp_y = 2,
+                     scale = FALSE) {
   
   dt <- as.data.table(dt)
-  protpca <- prcomp(t(dt[, .SD, .SDcols = samples]), scale. = TRUE)
+  protpca <- prcomp(t(dt[, .SD, .SDcols = samples]), scale. = scale)
   
   par(xpd = TRUE, mar = c(3,3,1,1), mgp = c(1.5,0.25,0), tck = - 0.01)
   plot(protpca$x[, c(comp_x, comp_y)], col = colors, pch = 19)
-  legend(x = "top", legend = groups, col = unique(colors), pch = 19, cex = 0.5, 
-         bty = "n", ncol = length(groups), inset = c(0,-0.1))
-  
+
   par(xpd = FALSE, mar = c(5.1, 4.1, 4.1, 2.1), mgp = c(3, 1, 0), tck = NA)
 }
 
@@ -809,7 +1016,6 @@ plot_pca <- function(dt, samples, colors, groups,
 #' * gplots
 #' 
 #' @author Victor Fanjul (2021-12-06)
-
 plot_prot_heatmap <- function(dt, samples, change_cols, sample_colors, label_col, 
                               sat_lim = 3, 
                               change_colors = c("dodgerblue", "white", "red")) {
@@ -851,7 +1057,6 @@ plot_prot_heatmap <- function(dt, samples, change_cols, sample_colors, label_col
 #' * gplots
 #' 
 #' @author Victor Fanjul (2021-11-20)
-
 plot_prot_heatmap_key <- function(sat_lim = 3, 
                                   change_colors = c("dodgerblue", "white", "red")) {
   
@@ -865,7 +1070,6 @@ plot_prot_heatmap_key <- function(sat_lim = 3,
   
   par(mar = c(5.1, 4.1, 4.1, 2.1), mgp = c(3, 1, 0), tck = NA, cex.axis = 1)
 }
-
 
 
 
@@ -886,7 +1090,6 @@ plot_prot_heatmap_key <- function(sat_lim = 3,
 #' * car
 #' 
 #' @author Victor Fanjul (2021-10-17)
-
 plot_qq <- function(dt, x, ...) {
   
   dt <- as.data.table(dt)
@@ -895,11 +1098,10 @@ plot_qq <- function(dt, x, ...) {
   qqPlot(dt[, get(x)], 
          xlab = "Theoretical normal quantiles",
          ylab = paste(x, " quantiles"), 
-         col.lines = "red", pch = 16, cex = 0.5, id = FALSE)
+         col.lines = "red", pch = 16, cex = 0.5, id = FALSE, ylim = c(-20, 20))
   
   par(mar = c(5.1, 4.1, 4.1, 2.1))
 }
-
 
 
 
@@ -931,13 +1133,12 @@ plot_qq <- function(dt, x, ...) {
 #' * data.table
 #' 
 #' @author Victor Fanjul (2021-08-28)
-
 plot_volcano <- function(dt, z_col, p_col, 
                          zlim = 1.5, 
                          alpha = 0.05,
                          cex = 0.5,
                          xlim = c(-5, 5),
-                         ylim = c(0, 5),
+                         ylim = c(0, 4),
                          color = c("red", "dodgerblue", "limegreen", "grey40"),
                          transp = c(0.8, 0.6, 0.6, 0.4)) {
   
