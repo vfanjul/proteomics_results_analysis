@@ -904,8 +904,8 @@ plot_gsea_ridges <- function(dt,
                              xlim = c(-4, 4)) {
   
   if (!is.null(y_max)) if (dt[, uniqueN(get(y_col))] > y_max) {
-    min_nes <- dt[, max(abs(get(nes_col))), get(y_col)][order(-V1)][1:y_max][, min(V1)]
-    dt <- dt[abs(get(nes_col)) >= min_nes]
+    sel_cat <- dt[, max(abs(get(nes_col))), get(y_col)][order(-V1)][1:y_max, get]
+    dt <- dt[get(y_col) %in% sel_cat]
   }
   
   lim <- max(abs(summary(dt[, get(x_col)])[c(1, 6)]))
