@@ -377,8 +377,10 @@ get_gsea_long <- function(gse, dt, param_cols,
   )[, group := gsub(".* (z|statistic) ", "", variable)]
   
   dt <- merge(gse, dt, all.x = TRUE, sort = FALSE
-  )[order(-NES)
+  )[, group_nes := NES, Description
   ][, group := factor(group, levels = gsub(".* (z|statistic) ", "", param_cols))
+  ][order(-group_nes, Description, group)
+  ][, group_nes := NULL
   ][, Description := factor(Description, levels = unique(Description))
   ][, core_enrichment := paste(get(id_col), collapse = "/"), Description
   ]
