@@ -41,8 +41,8 @@ quant_lim <- 0.99
 
 
 ## GSEA
-filter_col <- "NES" # Filter in GSEA. Either "NES", "pvalue, or "p.adjust"
-sig_lim <- "1.3" # Absolute lim value for filter col. 
+filter_col <- "p.adjust" # Filter in GSEA. Either "NES", "pvalue, or "p.adjust"
+sig_lim <- "0.05" # Absolute lim value for filter col. 
 
 l1_blacklist <- "organismal|disease|drug"
 l2_blacklist <- "virus|prokaryote|maps"
