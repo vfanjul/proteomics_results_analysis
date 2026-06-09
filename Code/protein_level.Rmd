@@ -155,13 +155,12 @@ plot_facets(prot_data[Artifact + Inconsistent == 0], samples, "", plot_qq)
 
 ```{r normality2, dpi=dpi, out.width = "90%", fig.height=figh/2/figs, fig.width=figw/figs, fig.cap="Boxplot for normality verification. The dotted lines delimit the threshold area within all sample means (thick lines) are expected."}
 
-norm_data <- melt(prot_data[Artifact + Inconsistent == 0], id.vars = "Protein", measure.vars = samples, variable.name = "Sample", value.name = "Zq")
-boxplot(Zq ~ Sample, norm_data, ylim = quantile(norm_data$Zq, c(0.01, 0.99)), 
-        border = exp_design$color, col = NULL)
-abline(h = c(-0.5, 0, 0.5), lty = c(3, 2, 3), col = "gray60")
+box_normal <- plot_box_normal(prot_data[Artifact + Inconsistent == 0], samples, 
+                              exp_design$color, norm_lim)
+box_normal$plot
 ```
 
-***Note:** The normality condition is not met when sample means (thick line) significantly diverge from 0. This is usually measured by indicating a threshold (dotted lines at `r norm_lim`). In this case, `r ifelse(any(abs(boxplot(Zq ~ Sample, norm_data, plot = FALSE)$stats[3, ]) > norm_lim), "Some samples deviate from this threshold, so protein quantitation must be reviewed.", "All samples show expected normal distributions.")` This step is merely a checkpoint but its inclusion in the manuscript is recommended.*
+***Note:** The normality condition is not met when sample means (thick line) significantly diverge from 0. This is usually measured by indicating a threshold (dotted lines at `r norm_lim`). In this case, `r ifelse(box_normal$issues, "Some samples deviate from this threshold, so protein quantitation must be reviewed.", "All samples show expected normal distributions.")` This step is merely a checkpoint but its inclusion in the manuscript is recommended.*
 
 
 ## Sample Variability Assessment
