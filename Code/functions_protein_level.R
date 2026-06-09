@@ -676,6 +676,51 @@ plot_bars <- function(dt, groups, values, colors, zlim, prot_col,
 
 
 
+#' Plot Normality Boxplot
+#' 
+#' @description Makes a boxplot to assess normality and a warning for issues.
+#' 
+#' @param dt Proteomics dataset.
+#' @param samples Vector of sample z column names.
+#' @param color Sample colors.
+#' @param norm_lim Normality limit. Default is 0.5.
+#' @param name_col Protein name column name. Default is "Protein".
+#' @param x X axis label. Default is "Sample.
+#' @param y Y axis label. Defaiult is "Zq".
+#' 
+#' @return List with boxplot and Boolean (true if there are normality issues).
+#' 
+#' @details 
+#' 
+#' # Required libraries:
+#' * data.table
+#' * ggplot2
+#' 
+#' @author Victor Fanjul (2026-06-09)
+plot_box_normal <- function(dt, samples, color, 
+                            norm_lim = 0.5,
+                            name_col = "Protein",
+                            x = "Sample", 
+                            y = "Zq") {
+  norm_data <- melt(dt, id.vars = name_col, measure.vars = samples, 
+                    variable.name = x, value.name = y)
+  
+  plot <- ggplot(norm_data, aes(x = .data[[x]], y = .data[[y]])) +
+    geom_boxplot(color = color, fill = NA) +
+    coord_cartesian(ylim = quantile(norm_data[[y]], c(0.01, 0.99))) +
+    geom_hline(yintercept = c(-norm_lim, 0, norm_lim), linetype = c(3, 2, 3), color = "gray60") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+          axis.text = element_text(color = "black"),
+          axis.title = element_text(color = "black"))
+  
+  issues <- any(abs(boxplot(norm_data[[y]] ~ norm_data[[x]], plot = FALSE)$stats[3, ]) > norm_lim)
+  
+  list(plot = plot, issues = issues)
+}
+
+
+
 #' Plot Correlation Pairs
 #' 
 #' @description Makes a matrix of correlation plots for each pair combination.
