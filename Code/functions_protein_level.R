@@ -89,10 +89,10 @@ arrange_facets <- function(facets) {
 fit_limma <- function(dt, samples, sample_groups) {
   
   dt <- as.data.table(dt)[, .SD, .SDcols = samples]
-  samples <- gsub(" ", "_", samples)
+  samples <- gsub("-", ".", gsub(" ", "_", samples))
   names(dt) <- samples
-  sample_groups <- factor(gsub(" ", "_", sample_groups), 
-                          levels = unique(gsub(" ", "_", sample_groups)))
+  sample_groups <- factor(gsub("-", ".", gsub(" ", "_", sample_groups)), 
+                          levels = unique(gsub("-", ".", gsub(" ", "_", sample_groups))))
   groups <- levels(sample_groups)
   
   model_matrix <- model.matrix(~0 + sample_groups)
@@ -104,7 +104,7 @@ fit_limma <- function(dt, samples, sample_groups) {
   
   fit <- lmFit(dt, model_matrix)
   fit <- eBayes(contrasts.fit(fit, cont_matrix))
-  fit$dt.cols <- paste0("P value ", gsub("_", " ", colnames(fit$p.value)))
+  fit$dt.cols <- paste0("P value ", gsub("\\.", "-", gsub("_", " ", colnames(fit$p.value))))
   fit
 }
 
