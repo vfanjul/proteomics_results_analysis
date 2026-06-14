@@ -710,9 +710,9 @@ plot_box_normal <- function(dt, samples, color,
     coord_cartesian(ylim = quantile(norm_data[[y]], c(0.01, 0.99))) +
     geom_hline(yintercept = c(-norm_lim, 0, norm_lim), linetype = c(3, 2, 3), color = "gray60") +
     theme_minimal() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
-          axis.text = element_text(color = "black"),
-          axis.title = element_text(color = "black"))
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          axis.text = element_text(color = "black", size = 11),
+          axis.title = element_text(color = "black", size = 12))
   
   issues <- any(abs(boxplot(norm_data[[y]] ~ norm_data[[x]], plot = FALSE)$stats[3, ]) > norm_lim)
   
@@ -900,8 +900,9 @@ plot_gsea_cnet <- function(gse,
                shape = 21, fill = "white", stroke = 1.2)
   
   set.seed(seed)
-  cnet <- cnet + geom_text_repel(aes_(x = ~x, y = ~y, label = ~substring(name, 1, 80)), bg.color = "white", 
-                                 max.overlaps = max.overlaps, cex = 3, bg.r = 0.1)
+  cnet <- cnet + geom_text_repel(aes_(x = ~x, y = ~y, label = ~substring(name, 1, 80)), 
+                                 bg.color = "white", max.overlaps = max.overlaps, 
+                                 size = 3.5, color = "black", bg.r = 0.1)
   print(cnet)
 }
 
@@ -976,7 +977,11 @@ plot_gsea_ridges <- function(dt,
                                limits = c(-lim, lim), guide = "none") +
           
           coord_cartesian(xlim = xlim) +
-          xlab(xlab) + ylab(NULL)
+          xlab(xlab) + ylab(NULL) +
+          theme_minimal() +
+          theme(axis.text = element_text(color = "black", size = 10),
+                axis.title = element_text(color = "black"))
+        
   )
 }
 
