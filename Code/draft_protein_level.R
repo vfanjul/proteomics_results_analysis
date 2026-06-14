@@ -83,11 +83,10 @@ prot_data2 <- copy(prot_data)[Artifact + Inconsistent == 0 & get(np_col) > 1]
 # Data exploration --------------------------------------------------------
 
 ## Normality
-norm_data <- melt(prot_data[Artifact + Inconsistent == 0], id.vars = "Protein", measure.vars = samples, variable.name = "Sample", value.name = "Zq")
-boxplot(Zq ~ Sample, norm_data, ylim = quantile(norm_data$Zq, c(0.01, 0.99)), 
-        border = exp_design$color, col = NULL)
-abline(h = c(-0.5, 0, 0.5), lty = c(3, 2, 3), col = "gray60")
-any(abs(boxplot(Zq ~ Sample, norm_data, plot = FALSE)$stats[3, ]) > norm_lim)
+box_normal <- plot_box_normal(prot_data[Artifact + Inconsistent == 0], samples, 
+                              exp_design$color, norm_lim)
+box_normal$plot
+box_normal$issues
 
 plot_facets(prot_data[Artifact + Inconsistent == 0], samples, "", plot_qq)
 
@@ -212,7 +211,7 @@ View(gsea_go_sig@result)
 gsea_go_long <- get_gsea_long(gsea_go_sig, prot_data2, 
                               case_t_stats, prot_col)
 
-go_height <- (length(unique(gsea_go_sig@result$Description)) + 20)/10
+go_height <- (gsea_go_long[, uniqueN(Description)] + 20)/10
 
 plot_gsea_ridges(gsea_go_long, y_max = cat_max, sat_lim = sat_lim)
 
@@ -241,7 +240,7 @@ View(gsea_kegg_sig@result)
 gsea_kegg_long <- get_gsea_long(gsea_kegg_sig, prot_data2, 
                                 case_t_stats, prot_col, id_col = "Entrez")
 
-kegg_height <- (length(unique(gsea_kegg_sig@result$Description)) + 20)/10
+kegg_height <- (gsea_kegg_long[, uniqueN(Description)] + 20)/10
 
 plot_gsea_ridges(gsea_kegg_long, y_max = cat_max, sat_lim = sat_lim)
 

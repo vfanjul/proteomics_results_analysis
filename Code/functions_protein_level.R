@@ -89,10 +89,10 @@ arrange_facets <- function(facets) {
 fit_limma <- function(dt, samples, sample_groups) {
   
   dt <- as.data.table(dt)[, .SD, .SDcols = samples]
-  samples <- gsub(" ", "_", samples)
+  samples <- gsub("-", ".", gsub(" ", "_", samples))
   names(dt) <- samples
-  sample_groups <- factor(gsub(" ", "_", sample_groups), 
-                          levels = unique(gsub(" ", "_", sample_groups)))
+  sample_groups <- factor(gsub("-", ".", gsub(" ", "_", sample_groups)), 
+                          levels = unique(gsub("-", ".", gsub(" ", "_", sample_groups))))
   groups <- levels(sample_groups)
   
   model_matrix <- model.matrix(~0 + sample_groups)
@@ -104,7 +104,7 @@ fit_limma <- function(dt, samples, sample_groups) {
   
   fit <- lmFit(dt, model_matrix)
   fit <- eBayes(contrasts.fit(fit, cont_matrix))
-  fit$dt.cols <- paste0("P value ", gsub("_", " ", colnames(fit$p.value)))
+  fit$dt.cols <- paste0("P value ", gsub("\\.", "-", gsub("_", " ", colnames(fit$p.value))))
   fit
 }
 
@@ -676,6 +676,51 @@ plot_bars <- function(dt, groups, values, colors, zlim, prot_col,
 
 
 
+#' Plot Normality Boxplot
+#' 
+#' @description Makes a boxplot to assess normality and a warning for issues.
+#' 
+#' @param dt Proteomics dataset.
+#' @param samples Vector of sample z column names.
+#' @param color Sample colors.
+#' @param norm_lim Normality limit. Default is 0.5.
+#' @param name_col Protein name column name. Default is "Protein".
+#' @param x X axis label. Default is "Sample.
+#' @param y Y axis label. Defaiult is "Zq".
+#' 
+#' @return List with boxplot and Boolean (true if there are normality issues).
+#' 
+#' @details 
+#' 
+#' # Required libraries:
+#' * data.table
+#' * ggplot2
+#' 
+#' @author Victor Fanjul (2026-06-09)
+plot_box_normal <- function(dt, samples, color, 
+                            norm_lim = 0.5,
+                            name_col = "Protein",
+                            x = "Sample", 
+                            y = "Zq") {
+  norm_data <- melt(dt, id.vars = name_col, measure.vars = samples, 
+                    variable.name = x, value.name = y)
+  
+  plot <- ggplot(norm_data, aes(x = .data[[x]], y = .data[[y]])) +
+    geom_boxplot(color = color, fill = NA) +
+    coord_cartesian(ylim = quantile(norm_data[[y]], c(0.01, 0.99))) +
+    geom_hline(yintercept = c(-norm_lim, 0, norm_lim), linetype = c(3, 2, 3), color = "gray60") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          axis.text = element_text(color = "black", size = 11),
+          axis.title = element_text(color = "black", size = 12))
+  
+  issues <- any(abs(boxplot(norm_data[[y]] ~ norm_data[[x]], plot = FALSE)$stats[3, ]) > norm_lim)
+  
+  list(plot = plot, issues = issues)
+}
+
+
+
 #' Plot Correlation Pairs
 #' 
 #' @description Makes a matrix of correlation plots for each pair combination.
@@ -855,8 +900,9 @@ plot_gsea_cnet <- function(gse,
                shape = 21, fill = "white", stroke = 1.2)
   
   set.seed(seed)
-  cnet <- cnet + geom_text_repel(aes_(x = ~x, y = ~y, label = ~substring(name, 1, 80)), bg.color = "white", 
-                                 max.overlaps = max.overlaps, cex = 3, bg.r = 0.1)
+  cnet <- cnet + geom_text_repel(aes_(x = ~x, y = ~y, label = ~substring(name, 1, 80)), 
+                                 bg.color = "white", max.overlaps = max.overlaps, 
+                                 size = 3.5, color = "black", bg.r = 0.1)
   print(cnet)
 }
 
@@ -931,7 +977,11 @@ plot_gsea_ridges <- function(dt,
                                limits = c(-lim, lim), guide = "none") +
           
           coord_cartesian(xlim = xlim) +
-          xlab(xlab) + ylab(NULL)
+          xlab(xlab) + ylab(NULL) +
+          theme_minimal() +
+          theme(axis.text = element_text(color = "black", size = 10),
+                axis.title = element_text(color = "black"))
+        
   )
 }
 
