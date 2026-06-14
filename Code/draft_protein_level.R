@@ -211,7 +211,7 @@ View(gsea_go_sig@result)
 gsea_go_long <- get_gsea_long(gsea_go_sig, prot_data2, 
                               case_t_stats, prot_col)
 
-go_height <- (length(unique(gsea_go_sig@result$Description)) + 20)/10
+go_height <- (gsea_go_long[, uniqueN(Description)] + 20)/10
 
 plot_gsea_ridges(gsea_go_long, y_max = cat_max, sat_lim = sat_lim)
 
@@ -240,7 +240,7 @@ View(gsea_kegg_sig@result)
 gsea_kegg_long <- get_gsea_long(gsea_kegg_sig, prot_data2, 
                                 case_t_stats, prot_col, id_col = "Entrez")
 
-kegg_height <- (length(unique(gsea_kegg_sig@result$Description)) + 20)/10
+kegg_height <- (gsea_kegg_long[, uniqueN(Description)] + 20)/10
 
 plot_gsea_ridges(gsea_kegg_long, y_max = cat_max, sat_lim = sat_lim)
 
